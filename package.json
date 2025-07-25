@@ -1,0 +1,68 @@
+{
+  "name": "cmake-language-model-tools",
+  "publisher": "arno-dev",
+  "displayName": "CMake Language Model Tools",
+  "description": "Give Copilot access to CMake Tools",
+  "version": "0.0.1",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "homepage": "https://github.com/itavero/vscode-cmake-language-model-tools",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/itavero/vscode-cmake-language-model-tools.git"
+  },
+  "bugs": {
+    "url": "https://github.com/itavero/vscode-cmake-language-model-tools/issues"
+  },
+  "sponsor": {
+    "url": "https://github.com/sponsors/itavero"
+  },
+  "engines": {
+    "vscode": "^1.102.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "CMake",
+    "Copilot"
+  ],
+  "qna": false,
+  "activationEvents": [
+    "workspaceContains:CMakeLists.txt",
+    "workspaceContains:**/CMakeLists.txt"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "cmake-language-model-tools.helloWorld",
+        "title": "Hello World"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@types/vscode": "^1.102.0",
+    "@typescript-eslint/eslint-plugin": "^8.31.1",
+    "@typescript-eslint/parser": "^8.31.1",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^9.25.1",
+    "typescript": "^5.8.3"
+  },
+  "extensionDependencies": [
+    "ms-vscode.cmake-tools"
+  ],
+  "dependencies": {
+    "vscode-cmake-tools": "^1.2.0"
+  }
+}

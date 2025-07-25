@@ -3,7 +3,7 @@
   "publisher": "arno-dev",
   "displayName": "CMake Language Model Tools",
   "description": "Give Copilot access to CMake Tools",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "license": "SEE LICENSE IN LICENSE.txt",
   "homepage": "https://github.com/itavero/vscode-cmake-language-model-tools",
   "repository": {
@@ -33,10 +33,75 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
-    "commands": [
+    "languageModelTools": [
       {
-        "command": "cmake-language-model-tools.helloWorld",
-        "title": "Hello World"
+        "name": "get_cmake_build_directory",
+        "displayName": "Get CMake Build Directory",
+        "modelDescription": "Returns the build directory for the CMake project and the active configuration. This is useful for understanding where the build artifacts are located, especially if you have multiple configurations with different build directories. Within the build directory, there's typically several useful files like a compile_commands.json file that describes how sources are compiled.",
+        "userDescription": "Get the build directory for the current CMake project and configuration",
+        "canBeReferencedInPrompt": true,
+        "toolReferenceName": "get_cmake_build_directory",
+        "icon": "$(file-binary)"
+      },
+      {
+        "name": "get_cmake_cache_variable",
+        "displayName": "Get CMake Cache Variable",
+        "modelDescription": "Retrieves a single variable from the CMake cache (e.g. CMakeCache.txt in the build directory) with documentation and type information. If the exact variable name is not found, it will suggest the closest match and list the names of all available variable. If no variable_name is supplied, all available variable names will be returned. This is useful for getting configuration values that are kept in the CMake cache.",
+        "userDescription": "Get a variable from the CMakeCache.txt",
+        "canBeReferencedInPrompt": true,
+        "toolReferenceName": "get_cmake_cache_variable",
+        "icon": "$(symbol-variable)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "variable_name": {
+              "type": "string",
+              "description": "Name of the CMake cache variable that you wish to retrieve. If not specified, all available variable names will be returned, which can be used for a follow-up query to get the value of a specific variable."
+            }
+          }
+        }
+      },
+      {
+        "name": "get_cmake_targets",
+        "displayName": "Get CMake Targets",
+        "modelDescription": "Retrieves CMake targets from the current project. It describes their type, source directory, artifacts, and other relevant information.",
+        "userDescription": "Get CMake targets from the current project",
+        "canBeReferencedInPrompt": true,
+        "toolReferenceName": "get_cmake_targets",
+        "icon": "$(target)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "targetNames": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Optional list of specific target names to retrieve. If not specified, returns all targets."
+            }
+          }
+        }
+      },
+      {
+        "name": "build_cmake_target",
+        "displayName": "Build CMake Target",
+        "modelDescription": "Builds the specified CMake target or all targets if none is specified. This executes the build process for the given targets.",
+        "userDescription": "Build CMake targets",
+        "canBeReferencedInPrompt": true,
+        "toolReferenceName": "build_cmake_target",
+        "icon": "$(gear)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "targets": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Optional list of target names to build. If not specified, builds all targets."
+            }
+          }
+        }
       }
     ]
   },
@@ -46,23 +111,26 @@
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "package": "vsce package",
+    "publish": "vsce publish"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
-    "@types/node": "24.x",
+    "@types/node": "^22.17.0",
     "@types/vscode": "^1.102.0",
-    "@typescript-eslint/eslint-plugin": "^8.31.1",
-    "@typescript-eslint/parser": "^8.31.1",
+    "@typescript-eslint/eslint-plugin": "^8.38.0",
+    "@typescript-eslint/parser": "^8.38.0",
     "@vscode/test-cli": "^0.0.11",
     "@vscode/test-electron": "^2.5.2",
-    "eslint": "^9.25.1",
-    "typescript": "^5.8.3"
+    "@vscode/vsce": "^3.6.0",
+    "eslint": "^9.32.0",
+    "typescript": "~5.8.3"
   },
   "extensionDependencies": [
     "ms-vscode.cmake-tools"
   ],
   "dependencies": {
-    "vscode-cmake-tools": "^1.2.0"
+    "vscode-cmake-tools": "^1.3.0"
   }
 }

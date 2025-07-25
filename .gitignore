@@ -4,6 +4,7 @@ node_modules
 .vscode-test/
 *.vsix
 vsc-extension-quickstart.md
+example/build/
 
 # Logs
 logs

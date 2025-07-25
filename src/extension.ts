@@ -1,31 +1,340 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
+import * as fs from "fs";
+import * as path from "path";
+import {
+  getCMakeToolsApi,
+  Version,
+  CMakeToolsApi,
+  Project,
+} from "vscode-cmake-tools";
+import {
+  getCMakeCache,
+  findClosestVariableName,
+  cacheVariableToString,
+  CMakeCacheVariable,
+} from "./cmake-cache-utils";
+
+let cmakeToolsApi: CMakeToolsApi | undefined;
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
-  // Use the console to output diagnostic information (console.log) and errors (console.error)
-  // This line of code will only be executed once when your extension is activated
-  console.log(
-    'Congratulations, your extension "cmake-language-model-tools" is now active!'
-  );
+export async function activate(context: vscode.ExtensionContext) {
+  console.log("CMake Language Model Tools extension is now active!");
 
-  // The command has been defined in the package.json file
-  // Now provide the implementation of the command with registerCommand
-  // The commandId parameter must match the command field in package.json
-  const disposable = vscode.commands.registerCommand(
-    "cmake-language-model-tools.helloWorld",
-    () => {
-      // The code you place here will be executed every time your command is executed
-      // Display a message box to the user
-      vscode.window.showInformationMessage(
-        "Hello World from CMake Language Model Tools!"
-      );
+  // Get the CMake Tools API
+  try {
+    cmakeToolsApi = await getCMakeToolsApi(Version.latest);
+    if (!cmakeToolsApi) {
+      console.warn("CMake Tools API not available");
     }
-  );
+  } catch (error) {
+    console.error("Failed to get CMake Tools API:", error);
+  }
 
-  context.subscriptions.push(disposable);
+  // Register all the language model tools
+  const disposables = [
+    registerGetCMakeBuildDirectoryTool(),
+    registerGetCMakeCacheVariableTool(),
+    registerGetCMakeTargetsTool(),
+    registerBuildCMakeTargetTool(),
+  ];
+
+  context.subscriptions.push(...disposables);
+}
+
+function registerGetCMakeBuildDirectoryTool(): vscode.Disposable {
+  return vscode.lm.registerTool("get_cmake_build_directory", {
+    invoke: async (options, token) => {
+      try {
+        const project = await getCurrentProject();
+        if (!project) {
+          return {
+            content: [
+              new vscode.LanguageModelTextPart("No active CMake project found"),
+            ],
+          };
+        }
+
+        const buildDir = await project.getBuildDirectory();
+        if (!buildDir) {
+          return {
+            content: [
+              new vscode.LanguageModelTextPart(
+                "Build directory not configured"
+              ),
+            ],
+          };
+        }
+
+        return {
+          content: [
+            new vscode.LanguageModelTextPart(
+              `CMake build directory: ${buildDir}`
+            ),
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            new vscode.LanguageModelTextPart(
+              `Error getting build directory: ${error}`
+            ),
+          ],
+        };
+      }
+    },
+  });
+}
+
+function registerGetCMakeCacheVariableTool(): vscode.Disposable {
+  return vscode.lm.registerTool("get_cmake_cache_variable", {
+    invoke: async (options, token) => {
+      try {
+        const { variable_name } = options.input as { variable_name?: string };
+
+        const cmakeCache = await getCMakeCache();
+
+        const variable_name_is_provided =
+          variable_name !== undefined && variable_name.trim().length > 0;
+
+        if (variable_name_is_provided) {
+          // Check if the variable name is in the cmakeCache map
+          const varFromCache = cmakeCache.get(variable_name);
+          if (varFromCache) {
+            return {
+              content: [
+                new vscode.LanguageModelTextPart(
+                  cacheVariableToString(varFromCache)
+                ),
+              ],
+            };
+          }
+        }
+
+        // Variable not found or not provided, get all variables.
+        if (cmakeCache.size === 0) {
+          return {
+            content: [
+              new vscode.LanguageModelTextPart(
+                "No variables found in CMake cache. Perhaps the project is not configured yet."
+              ),
+            ],
+          };
+        }
+
+        const varNames = Array.from(cmakeCache.keys()).sort();
+        if (!variable_name_is_provided) {
+          // If no variable name was provided, return all variable names
+          const result = `CMake cache contains ${
+            varNames.length
+          } variables:\n\n${varNames.map((n) => `- \`${n}\``).join("\n")}`;
+          return {
+            content: [new vscode.LanguageModelTextPart(result)],
+          };
+        }
+
+        // Variable not found, provide suggestions
+        const closestMatch = await findClosestVariableName(
+          variable_name,
+          varNames
+        );
+        let result = `Variable \`${variable_name}\` was not found in CMake cache.`;
+
+        if (closestMatch) {
+          const closestMatchInfo = cmakeCache.get(closestMatch);
+          result += `\n\nDid you mean \`${closestMatch}\`?\n\n`;
+          result += cacheVariableToString(closestMatchInfo!);
+        }
+
+        if (varNames.length > 1) {
+          result += `\n\nOther variables available in CMake cache:\n`;
+          result += varNames
+            .filter((n) => n !== closestMatch)
+            .map((n) => `- \`${n}\`\n`)
+            .join();
+        }
+
+        return {
+          content: [new vscode.LanguageModelTextPart(result)],
+        };
+      } catch (error) {
+        return {
+          content: [
+            new vscode.LanguageModelTextPart(
+              `Failed to get CMake cache variable due to an error: ${error}`
+            ),
+          ],
+        };
+      }
+    },
+  });
+}
+
+function registerGetCMakeTargetsTool(): vscode.Disposable {
+  return vscode.lm.registerTool("get_cmake_targets", {
+    invoke: async (options, token) => {
+      try {
+        const { targetNames } = options.input as { targetNames?: string[] };
+
+        const project = await getCurrentProject();
+        if (!project) {
+          return {
+            content: [
+              new vscode.LanguageModelTextPart("No active CMake project found"),
+            ],
+          };
+        }
+
+        const codeModel = project.codeModel;
+        if (!codeModel) {
+          return {
+            content: [
+              new vscode.LanguageModelTextPart(
+                "CMake code model not available. Try configuring the project first."
+              ),
+            ],
+          };
+        }
+
+        let allTargets = codeModel.configurations.flatMap((config) =>
+          config.projects.flatMap((proj) => proj.targets)
+        );
+
+        // Filter targets if specific names were requested
+        if (targetNames && targetNames.length > 0) {
+          allTargets = allTargets.filter((target) =>
+            targetNames.includes(target.name)
+          );
+        }
+
+        if (allTargets.length === 0) {
+          const message =
+            targetNames && targetNames.length > 0
+              ? `No targets found matching: ${targetNames.join(", ")}`
+              : "No targets found";
+          return {
+            content: [new vscode.LanguageModelTextPart(message)],
+          };
+        }
+
+        const formattedTargets = allTargets
+          .map((target) => {
+            let result = `Target: ${target.name}\n`;
+            result += `  Type: ${target.type}\n`;
+
+            if (target.sourceDirectory) {
+              result += `  Source Directory: ${target.sourceDirectory}\n`;
+            }
+
+            if (target.fullName) {
+              result += `  Full Name: ${target.fullName}\n`;
+            }
+
+            if (target.artifacts && target.artifacts.length > 0) {
+              result += `  Artifacts:\n${target.artifacts
+                .map((a) => `    - ${a}`)
+                .join("\n")}\n`;
+            }
+
+            if (target.fileGroups && target.fileGroups.length > 0) {
+              result += `  File Groups: ${target.fileGroups.length}\n`;
+              target.fileGroups.forEach((group, idx) => {
+                result += `    Group ${idx + 1}:\n`;
+                if (group.language) {
+                  result += `      Language: ${group.language}\n`;
+                }
+                result += `      Sources: ${group.sources.length} files\n`;
+                if (group.includePath && group.includePath.length > 0) {
+                  result += `      Include Paths: ${group.includePath.length}\n`;
+                }
+              });
+            }
+
+            return result;
+          })
+          .join("\n");
+
+        return {
+          content: [
+            new vscode.LanguageModelTextPart(
+              `CMake Targets (${allTargets.length} found):\n\n${formattedTargets}`
+            ),
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            new vscode.LanguageModelTextPart(`Error getting targets: ${error}`),
+          ],
+        };
+      }
+    },
+  });
+}
+
+function registerBuildCMakeTargetTool(): vscode.Disposable {
+  return vscode.lm.registerTool("build_cmake_target", {
+    invoke: async (options, token) => {
+      try {
+        const { targets } = options.input as { targets?: string[] };
+
+        const project = await getCurrentProject();
+        if (!project) {
+          return {
+            content: [
+              new vscode.LanguageModelTextPart("No active CMake project found"),
+            ],
+          };
+        }
+
+        // Start the build
+        const buildTargets =
+          targets && targets.length > 0 ? targets : undefined;
+        const targetText = buildTargets ? targets!.join(", ") : "all targets";
+
+        try {
+          await project.build(buildTargets);
+          return {
+            content: [
+              new vscode.LanguageModelTextPart(
+                `Successfully built ${targetText}`
+              ),
+            ],
+          };
+        } catch (buildError) {
+          return {
+            content: [
+              new vscode.LanguageModelTextPart(
+                `Build failed for ${targetText}: ${buildError}`
+              ),
+            ],
+          };
+        }
+      } catch (error) {
+        return {
+          content: [
+            new vscode.LanguageModelTextPart(`Error building target: ${error}`),
+          ],
+        };
+      }
+    },
+  });
+}
+
+async function getCurrentProject(): Promise<Project | undefined> {
+  if (!cmakeToolsApi) {
+    throw new Error("CMake Tools API not available");
+  }
+
+  const activeFolder = cmakeToolsApi.getActiveFolderPath();
+  if (!activeFolder) {
+    return undefined;
+  }
+
+  const folderUri = vscode.Uri.file(activeFolder);
+  return await cmakeToolsApi.getProject(folderUri);
 }
 
 // This method is called when your extension is deactivated

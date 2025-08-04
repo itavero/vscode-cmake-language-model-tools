@@ -39,6 +39,7 @@ export async function activate(context: vscode.ExtensionContext) {
     registerGetCMakeCacheVariableTool(),
     registerGetCMakeTargetsTool(),
     registerBuildCMakeTargetTool(),
+    registerConfigureCMakeProjectTool(),
   ];
 
   context.subscriptions.push(...disposables);
@@ -347,6 +348,63 @@ function registerBuildCMakeTargetTool(): vscode.Disposable {
         return {
           content: [
             new vscode.LanguageModelTextPart(`Error building target: ${error}`),
+          ],
+        };
+      }
+    },
+  });
+}
+
+function registerConfigureCMakeProjectTool(): vscode.Disposable {
+  return vscode.lm.registerTool("configure_cmake_project", {
+    invoke: async (options, token) => {
+      try {
+        const { delete_cache } = options.input as { delete_cache?: boolean };
+
+        const project = await getCurrentProject();
+        if (!project) {
+          return {
+            content: [
+              new vscode.LanguageModelTextPart("No active CMake project found"),
+            ],
+          };
+        }
+
+        // Determine which method to use based on delete_cache parameter
+        const shouldDeleteCache = delete_cache === true;
+
+        let result;
+        if (shouldDeleteCache) {
+          result = await project.reconfigureWithResult(token);
+        } else {
+          result = await project.configureWithResult(token);
+        }
+
+        const statusText =
+          result.exitCode === 0 ? "successfully" : "with errors";
+        const configAction = shouldDeleteCache ? "reconfigured" : "configured";
+
+        let responseText = `CMake project ${configAction} **${statusText}**. Exit code: \`${result.exitCode}\`\n\n`;
+
+        // Include stderr if present
+        if (result.stderr) {
+          responseText += `\n\nError output:\n\`\`\`\n${result.stderr}\n\`\`\`\n\n`;
+        }
+
+        // Include stdout if present
+        if (result.stdout) {
+          responseText += `\n\nStandard output:\n\`\`\`\n${result.stdout}\n\`\`\``;
+        }
+
+        return {
+          content: [new vscode.LanguageModelTextPart(responseText)],
+        };
+      } catch (error) {
+        return {
+          content: [
+            new vscode.LanguageModelTextPart(
+              `Error configuring CMake project: ${error}`
+            ),
           ],
         };
       }

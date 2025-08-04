@@ -6,6 +6,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(MY_CUSTOM_VAR "Hi Copilot!" CACHE STRING "A custom variable for demonstration purposes")
+
+if(DEFINED CACHE{MY_CUSTOM_BOOLEAN})
+  message(STATUS "MY_CUSTOM_BOOLEAN is defined in the cache, so a cache is being used.")
+endif()
+
 set(MY_CUSTOM_BOOLEAN ON CACHE BOOL "A custom boolean variable for demonstration purposes")
 
 # Add executable
@@ -32,6 +37,10 @@ add_custom_target(docs
   COMMAND echo "Generating documentation..."
   COMMENT "Generate project documentation"
 )
+
+# Messages to check for in the automatied tests
+message(STATUS "LANGUAGE MODEL: This should end up in the std output of the test")
+message(NOTICE "LANGUAGE MODEL: This is an important message in the std err output.")
 
 # Installation rules
 install(TARGETS hello_world

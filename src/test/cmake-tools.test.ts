@@ -67,6 +67,7 @@ suite("CMake Language Model Tools Test Suite", () => {
       "get_cmake_cache_variable",
       "get_cmake_targets",
       "build_cmake_target",
+      "configure_cmake_project",
     ];
 
     const registeredTools = vscode.lm.tools.map((tool) => tool.name);
@@ -388,5 +389,339 @@ suite("CMake Language Model Tools Test Suite", () => {
         text.includes("configured"),
       "Result should mention build process or indicate no project available"
     );
+  });
+
+  suite("configure_cmake_project tool", () => {
+    test("should configure without deleting cache", async function () {
+      this.timeout(30000); // Longer timeout for configuration
+
+      const result = await vscode.lm.invokeTool("configure_cmake_project", {
+        input: { delete_cache: false },
+        toolInvocationToken: undefined,
+      });
+
+      assert.ok(result, "Tool should return a result");
+      assert.ok(result.content, "Result should have content");
+      assert.ok(Array.isArray(result.content), "Content should be an array");
+
+      const firstPart = result.content[0];
+      assert.ok(
+        firstPart instanceof vscode.LanguageModelTextPart,
+        "First part should be text"
+      );
+
+      const text = firstPart.value;
+      console.log("configure_cmake_project (no cache delete) result:", text);
+
+      // Should indicate configuration success or indicate no project available
+      assert.ok(
+        text.includes("Configuration completed") ||
+          text.includes("configured") ||
+          text.includes("successfully") ||
+          text.includes("No active") ||
+          text.includes("not available"),
+        "Result should mention configuration completion or indicate no project available"
+      );
+
+      // Check for the specific message outputs we added to CMakeLists.txt
+      if (text.includes("configured successfully")) {
+        assert.ok(
+          text.includes("LANGUAGE MODEL: This should end up in the std output"),
+          "stdout should contain our test message from CMakeLists.txt"
+        );
+        assert.ok(
+          text.includes(
+            "LANGUAGE MODEL: This is an important message in the std err output"
+          ),
+          "stderr should contain our test notice message from CMakeLists.txt"
+        );
+        // When not deleting cache, we should see the cache usage message
+        assert.ok(
+          text.includes(
+            "MY_CUSTOM_BOOLEAN is defined in the cache, so a cache is being used"
+          ),
+          "stdout should contain the cache usage detection message when cache is preserved"
+        );
+      }
+    });
+
+    test("should configure with cache deletion", async function () {
+      this.timeout(30000); // Longer timeout for configuration with cache deletion
+
+      const result = await vscode.lm.invokeTool("configure_cmake_project", {
+        input: { delete_cache: true },
+        toolInvocationToken: undefined,
+      });
+
+      assert.ok(result, "Tool should return a result");
+      assert.ok(result.content, "Result should have content");
+      assert.ok(Array.isArray(result.content), "Content should be an array");
+
+      const firstPart = result.content[0];
+      assert.ok(
+        firstPart instanceof vscode.LanguageModelTextPart,
+        "First part should be text"
+      );
+
+      const text = firstPart.value;
+      console.log("configure_cmake_project (with cache delete) result:", text);
+
+      // Should indicate reconfiguration success or indicate no project available
+      assert.ok(
+        text.includes("reconfigured successfully") ||
+          text.includes("No active") ||
+          text.includes("not available"),
+        "Result should mention reconfiguration completion or indicate no project available"
+      );
+
+      // Check for the specific message outputs we added to CMakeLists.txt
+      if (text.includes("reconfigured successfully")) {
+        assert.ok(
+          text.includes("LANGUAGE MODEL: This should end up in the std output"),
+          "stdout should contain our test message from CMakeLists.txt after reconfiguration"
+        );
+        assert.ok(
+          text.includes(
+            "LANGUAGE MODEL: This is an important message in the std err output"
+          ),
+          "stderr should contain our test notice message from CMakeLists.txt after reconfiguration"
+        );
+        // When deleting cache, we should NOT see the cache usage message since cache was deleted
+        assert.ok(
+          !text.includes(
+            "MY_CUSTOM_BOOLEAN is defined in the cache, so a cache is being used"
+          ),
+          "stdout should NOT contain the cache usage detection message when cache is deleted"
+        );
+      }
+    });
+
+    test("should handle configuration without parameters (default behavior)", async function () {
+      this.timeout(30000);
+
+      const result = await vscode.lm.invokeTool("configure_cmake_project", {
+        input: {},
+        toolInvocationToken: undefined,
+      });
+
+      assert.ok(result, "Tool should return a result");
+      assert.ok(result.content, "Result should have content");
+      assert.ok(Array.isArray(result.content), "Content should be an array");
+
+      const firstPart = result.content[0];
+      assert.ok(
+        firstPart instanceof vscode.LanguageModelTextPart,
+        "First part should be text"
+      );
+
+      const text = firstPart.value;
+      console.log("configure_cmake_project (default) result:", text);
+
+      // Should indicate configuration success (default is configure without cache deletion)
+      assert.ok(
+        text.includes("configured successfully") ||
+          text.includes("No active") ||
+          text.includes("not available"),
+        "Result should mention configuration completion or indicate no project available"
+      );
+
+      // Default behavior should preserve cache, so check for cache usage message
+      if (text.includes("configured successfully")) {
+        assert.ok(
+          text.includes(
+            "MY_CUSTOM_BOOLEAN is defined in the cache, so a cache is being used"
+          ),
+          "Default configuration should preserve cache and show cache usage message"
+        );
+      }
+    });
+
+    test("should include exit code and stdout/stderr in output", async function () {
+      this.timeout(30000);
+
+      const result = await vscode.lm.invokeTool("configure_cmake_project", {
+        input: { delete_cache: false },
+        toolInvocationToken: undefined,
+      });
+
+      assert.ok(result, "Tool should return a result");
+      assert.ok(result.content, "Result should have content");
+
+      const firstPart = result.content[0];
+      assert.ok(
+        firstPart instanceof vscode.LanguageModelTextPart,
+        "First part should be text"
+      );
+
+      const text = firstPart.value;
+      console.log("configure_cmake_project output format test:", text);
+
+      // Check that the output includes structured information
+      if (!text.includes("No active") && !text.includes("Error configuring")) {
+        // If there's an active project and no error, check for structured output
+        assert.ok(
+          text.includes("Exit code:") || text.includes("exit code"),
+          "Result should include exit code information"
+        );
+
+        // Should have stdout and/or stderr sections
+        assert.ok(
+          text.includes("Standard output:") || text.includes("Error output:"),
+          "Result should include stdout or stderr sections"
+        );
+
+        // Specifically check for our CMake messages in the appropriate sections
+        if (text.includes("Standard output:")) {
+          assert.ok(
+            text.includes(
+              "LANGUAGE MODEL: This should end up in the std output"
+            ),
+            "Standard output section should contain our STATUS message"
+          );
+        }
+      }
+    });
+
+    test("configuration should actually work and affect the project", async function () {
+      this.timeout(30000);
+
+      // First, get the current CMake cache variable to verify the project is working
+      const cacheBeforeResult = await vscode.lm.invokeTool(
+        "get_cmake_cache_variable",
+        {
+          input: { variable_name: "MY_CUSTOM_VAR" },
+          toolInvocationToken: undefined,
+        }
+      );
+
+      const cacheBeforeText = (
+        cacheBeforeResult.content[0] as vscode.LanguageModelTextPart
+      ).value;
+
+      // Verify the project is in a good state before reconfiguration
+      assert.ok(
+        cacheBeforeText.includes("MY_CUSTOM_VAR") &&
+          cacheBeforeText.includes("Hi Copilot!"),
+        "Project should be properly configured before reconfiguration test"
+      );
+
+      // Now trigger a reconfiguration
+      const configResult = await vscode.lm.invokeTool(
+        "configure_cmake_project",
+        {
+          input: { delete_cache: true },
+          toolInvocationToken: undefined,
+        }
+      );
+
+      const configText = (
+        configResult.content[0] as vscode.LanguageModelTextPart
+      ).value;
+      console.log("Reconfiguration test result:", configText);
+
+      // After reconfiguration, verify the project is still working
+      const cacheAfterResult = await vscode.lm.invokeTool(
+        "get_cmake_cache_variable",
+        {
+          input: { variable_name: "MY_CUSTOM_VAR" },
+          toolInvocationToken: undefined,
+        }
+      );
+
+      const cacheAfterText = (
+        cacheAfterResult.content[0] as vscode.LanguageModelTextPart
+      ).value;
+
+      // Verify the project is still properly configured after reconfiguration
+      assert.ok(
+        cacheAfterText.includes("MY_CUSTOM_VAR") &&
+          cacheAfterText.includes("Hi Copilot!"),
+        "Project should still be properly configured after reconfiguration"
+      );
+
+      // The configuration tool should have completed successfully
+      assert.ok(
+        configText.includes("reconfigured successfully") ||
+          configText.includes("Error configuring"),
+        "Configuration should complete successfully or show error"
+      );
+    });
+
+    test("should demonstrate cache detection difference between configure and reconfigure", async function () {
+      this.timeout(60000); // Longer timeout as we're doing multiple operations
+
+      // First, do a regular configure (should use existing cache)
+      const configureResult = await vscode.lm.invokeTool(
+        "configure_cmake_project",
+        {
+          input: { delete_cache: false },
+          toolInvocationToken: undefined,
+        }
+      );
+
+      const configureText = (
+        configureResult.content[0] as vscode.LanguageModelTextPart
+      ).value;
+      console.log("Configure (preserve cache) result:", configureText);
+
+      // Then, do a reconfigure (should delete cache first)
+      const reconfigureResult = await vscode.lm.invokeTool(
+        "configure_cmake_project",
+        {
+          input: { delete_cache: true },
+          toolInvocationToken: undefined,
+        }
+      );
+
+      const reconfigureText = (
+        reconfigureResult.content[0] as vscode.LanguageModelTextPart
+      ).value;
+      console.log("Reconfigure (delete cache) result:", reconfigureText);
+
+      // When preserving cache, we should see the cache detection message
+      if (configureText.includes("configured successfully")) {
+        assert.ok(
+          configureText.includes(
+            "MY_CUSTOM_BOOLEAN is defined in the cache, so a cache is being used"
+          ),
+          "Configure with preserved cache should show cache detection message"
+        );
+      }
+
+      // When deleting cache, we should NOT see the cache detection message
+      if (reconfigureText.includes("reconfigured successfully")) {
+        assert.ok(
+          !reconfigureText.includes(
+            "MY_CUSTOM_BOOLEAN is defined in the cache, so a cache is being used"
+          ),
+          "Reconfigure with deleted cache should NOT show cache detection message"
+        );
+      }
+
+      // Both should contain the basic test messages
+      if (configureText.includes("configured successfully")) {
+        assert.ok(
+          configureText.includes(
+            "LANGUAGE MODEL: This should end up in the std output"
+          ) &&
+            configureText.includes(
+              "LANGUAGE MODEL: This is an important message in the std err output"
+            ),
+          "Configure should contain both test messages"
+        );
+      }
+
+      if (reconfigureText.includes("reconfigured successfully")) {
+        assert.ok(
+          reconfigureText.includes(
+            "LANGUAGE MODEL: This should end up in the std output"
+          ) &&
+            reconfigureText.includes(
+              "LANGUAGE MODEL: This is an important message in the std err output"
+            ),
+          "Reconfigure should contain both test messages"
+        );
+      }
+    });
   });
 });

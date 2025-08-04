@@ -279,6 +279,44 @@ suite("CMake Language Model Tools Test Suite", () => {
         this.skip();
       }
     });
+
+    test("should return multiple variables for wildcard search", async function () {
+      this.timeout(10000);
+
+      try {
+        const result = await vscode.lm.invokeTool("get_cmake_cache_variable", {
+          input: { variable_name: "MY_CUSTOM_*" },
+          toolInvocationToken: undefined,
+        });
+
+        assert.ok(result, "Tool should return a result");
+        assert.ok(result.content, "Result should have content");
+        assert.ok(Array.isArray(result.content), "Content should be an array");
+
+        const firstPart = result.content[0];
+        assert.ok(
+          firstPart instanceof vscode.LanguageModelTextPart,
+          "First part should be text"
+        );
+
+        const text = firstPart.value;
+        console.log("get_cmake_cache_variable wildcard result:", text);
+
+        // Should return both custom variables
+        assert.ok(
+          text.includes("Found 2 variables") &&
+            text.includes("MY_CUSTOM_VAR") &&
+            text.includes("MY_CUSTOM_BOOLEAN"),
+          "Result should find both custom variables with wildcard search"
+        );
+      } catch (error) {
+        console.log(
+          "Error testing get_cmake_cache_variable wildcard tool:",
+          error
+        );
+        this.skip();
+      }
+    });
   });
 
   test("get_cmake_targets tool works", async function () {

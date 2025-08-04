@@ -20,11 +20,11 @@ This tool returns the build directory for the current CMake project. It is usefu
 
 > State: ✅ **Implemented**
 
-This tool retrieves a single value from the CMake cache, or lists all variables when no parameter is provided. It is useful for getting configuration values that are kept in the CMake cache.
+This tool retrieves one or more values from the CMake cache. It supports exact name matching, wildcard (`*`) searches, or listing all variables when no parameter is provided. It is useful for getting configuration values that are kept in the CMake cache.
 
 **Parameters:**
 
-- `variableName` (optional): The name of the CMake cache variable to retrieve. If not specified, returns a list of all cache variables.
+- `variableName` (optional): The name of the CMake cache variable to retrieve. This can be an exact name or a pattern containing a wildcard (`*`). If not specified, returns a list of all cache variables.
 
 ### `#get_cmake_targets`
 

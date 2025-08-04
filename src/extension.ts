@@ -88,6 +88,11 @@ function registerGetCMakeBuildDirectoryTool(): vscode.Disposable {
   });
 }
 
+function escapeRegex(string: string): string {
+  // $& means the whole matched string
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function registerGetCMakeCacheVariableTool(): vscode.Disposable {
   return vscode.lm.registerTool("get_cmake_cache_variable", {
     invoke: async (options, token) => {
@@ -100,6 +105,38 @@ function registerGetCMakeCacheVariableTool(): vscode.Disposable {
           variable_name !== undefined && variable_name.trim().length > 0;
 
         if (variable_name_is_provided) {
+          if (variable_name.includes("*")) {
+            // Wildcard search
+            const pattern = new RegExp(
+              `^${variable_name.split("*").map(escapeRegex).join(".*")}$`
+            );
+
+            const matchingVariables: CMakeCacheVariable[] = [];
+            for (const [name, variable] of cmakeCache.entries()) {
+              if (pattern.test(name)) {
+                matchingVariables.push(variable);
+              }
+            }
+
+            if (matchingVariables.length > 0) {
+              const result = `Found ${
+                matchingVariables.length
+              } variables matching \`${variable_name}\`:\n\n${matchingVariables
+                .map(cacheVariableToString)
+                .join("\n\n")}`;
+              return {
+                content: [new vscode.LanguageModelTextPart(result)],
+              };
+            } else {
+              return {
+                content: [
+                  new vscode.LanguageModelTextPart(
+                    `No variables found matching pattern \`${variable_name}\`.`
+                  ),
+                ],
+              };
+            }
+          }
           // Check if the variable name is in the cmakeCache map
           const varFromCache = cmakeCache.get(variable_name);
           if (varFromCache) {

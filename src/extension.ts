@@ -127,26 +127,20 @@ function registerGetCMakeCacheVariableTool(): vscode.Disposable {
               return {
                 content: [new vscode.LanguageModelTextPart(result)],
               };
-            } else {
+            }
+            // If no matches, we will fall through to the "variable not found" logic below
+          } else {
+            // Check if the variable name is in the cmakeCache map
+            const varFromCache = cmakeCache.get(variable_name);
+            if (varFromCache) {
               return {
                 content: [
                   new vscode.LanguageModelTextPart(
-                    `No variables found matching pattern \`${variable_name}\`.`
+                    cacheVariableToString(varFromCache)
                   ),
                 ],
               };
             }
-          }
-          // Check if the variable name is in the cmakeCache map
-          const varFromCache = cmakeCache.get(variable_name);
-          if (varFromCache) {
-            return {
-              content: [
-                new vscode.LanguageModelTextPart(
-                  cacheVariableToString(varFromCache)
-                ),
-              ],
-            };
           }
         }
 

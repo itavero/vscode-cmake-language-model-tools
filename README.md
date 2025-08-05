@@ -2,6 +2,12 @@
 
 This Visual Studio Code extension provides language model tools to allow Copilot to interact with the [CMake Tools extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cmake-tools).
 
+## Current state
+
+I'm creating a first version of this extension with the help of my friend, Copilot.
+I still need to validate it a bit more and actually use it in my own development workflow,
+to see how practical it is and what improvements are needed.
+
 ## Features
 
 This extension provides several language model tools that enable Copilot to access CMake project information and perform build operations. These tools work with the CMake Tools extension to provide a seamless experience.
@@ -68,10 +74,6 @@ Of course, it will only provide real data as soon as the CMake Tools extension h
 - "Get the value of CMAKE_BUILD_TYPE from the cache" → Uses `#get_cmake_cache_variable`
 - "Build the main target" → Uses `#build_cmake_target`
 - "Which targets should I build to test src/math.h?" → Uses `#find_cmake_build_target_containing_file`
-
-## Development
-
-See [DEVELOPMENT.md](DEVELOPMENT.md) for development setup and contribution guidelines.
 
 ## License
 

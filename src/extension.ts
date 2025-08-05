@@ -122,23 +122,13 @@ function registerGetCMakeProjectInfoTool(): vscode.Disposable {
 
         if (allTargets.length > 0) {
           // Sort targets alphabetically by name
-          const sortedTargets = allTargets
-            .map((target) => {
-              return {
-                name: target.name,
-                type: formatTargetType(target.type),
-                sourcePath: getRelativeOrAbsoluteSourcePath(
-                  target.sourceDirectory,
-                  workspaceRoot
-                ),
-              };
-            })
-            .sort((a, b) => a.name.localeCompare(b.name));
-
-          sortedTargets.forEach((target) => {
-            let targetInfo = `  - ${target.name} (${target.type} defined in \`${target.sourcePath}\`)`;
-            result += targetInfo + "\n";
-          });
+          result += allTargets
+            .map(
+              (target) =>
+                "- " + targetToTextRepresentation(target, workspaceRoot)
+            )
+            .sort()
+            .join("\n");
         } else {
           result += "  No targets found\n";
         }
@@ -185,6 +175,31 @@ function getWorkspaceRoot(): string {
 }
 
 /**
+ * Converts a CMake target to a text representation, consisting of:
+ * - Target name
+ * - Target type (formatted)
+ * - Source directory (relative to workspace root, or absolute if not within workspace)
+ *
+ * @param target The CMake target to represent.
+ * @param workspaceRoot The workspace root directory.
+ * @returns A string representing the target.
+ */
+function targetToTextRepresentation(
+  target: CodeModel.Target,
+  workspaceRoot: string
+): string {
+  const sourceDescription =
+    target.sourceDirectory === undefined
+      ? "with an unknown source directory"
+      : "defined in `" +
+        getRelativeOrAbsoluteSourcePath(target.sourceDirectory, workspaceRoot) +
+        "`";
+  return `\`${target.name}\` (${formatTargetType(
+    target.type
+  )} ${sourceDescription})`;
+}
+
+/**
  * Gets the best display path for a source directory - relative if possible, absolute as fallback.
  *
  * @param sourceDirectory The absolute or relative path to the source directory.
@@ -192,14 +207,9 @@ function getWorkspaceRoot(): string {
  * @returns The relative path if within workspace, absolute path otherwise. Never returns undefined.
  */
 function getRelativeOrAbsoluteSourcePath(
-  sourceDirectory: string | undefined,
+  sourceDirectory: string,
   workspaceRoot: string
 ): string {
-  if (!sourceDirectory) {
-    // If no source directory is provided, return the workspace root as fallback
-    return workspaceRoot;
-  }
-
   try {
     // Resolve sourceDirectory relative to workspaceRoot if it's not absolute
     const resolvedWorkspaceRoot = path.resolve(workspaceRoot);
@@ -224,9 +234,10 @@ function getRelativeOrAbsoluteSourcePath(
     return resolvedSourceDir;
   } catch (error) {
     console.warn("Error calculating source directory path:", error);
-    // Last fallback - return the original path or workspace root
-    return sourceDirectory || workspaceRoot;
   }
+
+  // Fallback - return the original path or workspace root
+  return sourceDirectory;
 }
 
 function registerGetCMakeCacheVariableTool(): vscode.Disposable {
@@ -615,31 +626,23 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
         // Direct matches first
         if (directMatches.length === 1) {
           const target = directMatches[0];
-          const sourceDir = getRelativeOrAbsoluteSourcePath(
-            target.sourceDirectory,
-            workspaceRoot
-          );
-          let message = `The file \`${file_path}\` is directly included in the \`${
-            target.name
-          }\` target, which has type ${formatTargetType(target.type)}.`;
-          message += ` The target's source directory is at \`${sourceDir}\`.`;
           return {
-            content: [new vscode.LanguageModelTextPart(message)],
+            content: [
+              new vscode.LanguageModelTextPart(
+                `The file \`${file_path}\` is directly included in the target ${targetToTextRepresentation(
+                  target,
+                  workspaceRoot
+                )}.`
+              ),
+            ],
           };
         }
 
         if (directMatches.length > 1) {
           let result = `Multiple targets seem to directly include \`${file_path}\`:\n\n`;
-          for (const match of directMatches) {
-            const sourceDir = getRelativeOrAbsoluteSourcePath(
-              match.sourceDirectory,
-              workspaceRoot
-            );
-            let targetInfo = `  - ${match.name} (${formatTargetType(
-              match.type
-            )}) [${sourceDir}]`;
-            result += targetInfo + "\n";
-          }
+          result += directMatches
+            .map((m) => "- " + targetToTextRepresentation(m, workspaceRoot))
+            .join("\n");
 
           return {
             content: [new vscode.LanguageModelTextPart(result)],
@@ -661,30 +664,14 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
           let result = `Found ${includeMatches.length} targets that can potentially include file \`${file_path}\`.\n`;
 
           if (matchInSourceDir !== undefined) {
-            const sourceDir = getRelativeOrAbsoluteSourcePath(
-              matchInSourceDir.sourceDirectory,
-              workspaceRoot
-            );
-            let message = `It is likely part of the \`${
-              matchInSourceDir.name
-            }\` target, which has type ${formatTargetType(
-              matchInSourceDir.type
-            )}, as it was found within its source directory at \`${sourceDir}\`.`;
-            result += message + "\n\n";
+            result += `It is likely part of target ${matchInSourceDir.name}, as it was found within an include directory inside the target's source directory.\n\n`;
           }
 
           const targetNames = includeMatches
             .filter((match) => match.target.name !== matchInSourceDir?.name)
-            .map((m) => {
-              const sourceDir = getRelativeOrAbsoluteSourcePath(
-                m.target.sourceDirectory,
-                workspaceRoot
-              );
-              let targetInfo = `${m.target.name} (${formatTargetType(
-                m.target.type
-              )}) [${sourceDir}]`;
-              return targetInfo;
-            })
+            .map(
+              (m) => "- " + targetToTextRepresentation(m.target, workspaceRoot)
+            )
             .sort();
 
           if (targetNames.length > 0) {
@@ -693,8 +680,7 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
             } else {
               result += `Targets that can access this file via include paths:\n`;
             }
-            result +=
-              targetNames.map((name) => `  - ${name}`).join("\n") + "\n\n";
+            result += targetNames.join("\n");
           }
 
           return {
@@ -704,20 +690,15 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
 
         // Source directory matches
         if (sourceDirMatches.length > 0) {
-          const target = sourceDirMatches[0];
-          const sourceDir = getRelativeOrAbsoluteSourcePath(
-            target.sourceDirectory,
-            workspaceRoot
-          );
-
-          let message = `The file \`${file_path}\` is located within the source directory of the \`${
-            target.name
-          }\` target, which has type ${formatTargetType(
-            target.type
-          )} at \`${sourceDir}\`. This seems the most likely target to own this file.`;
-
           return {
-            content: [new vscode.LanguageModelTextPart(message)],
+            content: [
+              new vscode.LanguageModelTextPart(
+                `The file \`${file_path}\` is located within the source directory of target ${targetToTextRepresentation(
+                  sourceDirMatches[0],
+                  workspaceRoot
+                )}. This seems the most likely target to own this file.`
+              ),
+            ],
           };
         }
 

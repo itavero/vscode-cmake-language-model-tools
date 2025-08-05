@@ -26,17 +26,6 @@ This tool retrieves one or more values from the CMake cache. It supports exact n
 
 - `variableName` (optional): The name of the CMake cache variable to retrieve. This can be an exact name or a pattern containing a wildcard (`*`). If not specified, returns a list of all cache variables.
 
-### `#get_cmake_targets`
-
-> State: ✅ **Implemented**
-
-This tool retrieves one or more CMake targets from the current project (or all if none specified).
-It describes their type, source directory, artifacts, and other relevant information.
-
-**Parameters:**
-
-- `targetNames` (optional): Array of specific target names to retrieve. If not specified, returns all targets.
-
 ### `#build_cmake_target`
 
 > State: ✅ **Implemented**
@@ -67,7 +56,7 @@ This is useful for determining which targets to build when testing if a specific
 
 ## Usage
 
-Once installed, the language model tools will be automatically available when you have a CMake project open. You can reference these tools in Copilot Chat using the `#` syntax (e.g., `#get_cmake_targets`).
+Once installed, the language model tools will be automatically available when you have a CMake project open. You can reference these tools in Copilot Chat using the `#` syntax (e.g., `#get_cmake_project_info`).
 
 The extension automatically activates when it detects a CMakeLists.txt file in your workspace.
 Of course, it will only provide real data as soon as the CMake Tools extension has configured the project and can provide the necessary information.
@@ -75,7 +64,7 @@ Of course, it will only provide real data as soon as the CMake Tools extension h
 ## Example Usage
 
 - "Show me an overview of this CMake project" → Uses `#get_cmake_project_info`
-- "What targets are available in this project?" → Uses `#get_cmake_targets`
+- "What targets are available in this project?" → Uses `#get_cmake_project_info`
 - "Get the value of CMAKE_BUILD_TYPE from the cache" → Uses `#get_cmake_cache_variable`
 - "Build the main target" → Uses `#build_cmake_target`
 - "Which targets should I build to test src/math.h?" → Uses `#find_cmake_build_target_containing_file`

@@ -39,7 +39,6 @@ export async function activate(context: vscode.ExtensionContext) {
     registerConfigureCMakeProjectTool(),
     registerGetCMakeProjectInfoTool(),
     registerGetCMakeCacheVariableTool(),
-    registerGetCMakeTargetsTool(),
     registerBuildCMakeTargetTool(),
     registerFindCMakeBuildTargetContainingFileTool(),
   ];
@@ -243,108 +242,6 @@ function registerGetCMakeCacheVariableTool(): vscode.Disposable {
             new vscode.LanguageModelTextPart(
               `Failed to get CMake cache variable due to an error: ${error}`
             ),
-          ],
-        };
-      }
-    },
-  });
-}
-
-function registerGetCMakeTargetsTool(): vscode.Disposable {
-  return vscode.lm.registerTool("get_cmake_targets", {
-    invoke: async (options, token) => {
-      try {
-        const { targetNames } = options.input as { targetNames?: string[] };
-
-        const project = await getCurrentProject();
-        if (!project) {
-          return {
-            content: [
-              new vscode.LanguageModelTextPart("No active CMake project found"),
-            ],
-          };
-        }
-
-        const codeModel = project.codeModel;
-        if (!codeModel) {
-          return {
-            content: [
-              new vscode.LanguageModelTextPart(
-                "CMake code model not available. Try configuring the project first."
-              ),
-            ],
-          };
-        }
-
-        let allTargets = codeModel.configurations.flatMap((config) =>
-          config.projects.flatMap((proj) => proj.targets)
-        );
-
-        // Filter targets if specific names were requested
-        if (targetNames && targetNames.length > 0) {
-          allTargets = allTargets.filter((target) =>
-            targetNames.includes(target.name)
-          );
-        }
-
-        if (allTargets.length === 0) {
-          const message =
-            targetNames && targetNames.length > 0
-              ? `No targets found matching: ${targetNames.join(", ")}`
-              : "No targets found";
-          return {
-            content: [new vscode.LanguageModelTextPart(message)],
-          };
-        }
-
-        const formattedTargets = allTargets
-          .map((target) => {
-            let result = `Target: ${target.name}\n`;
-            result += `  Type: ${target.type}\n`;
-
-            if (target.sourceDirectory) {
-              result += `  Source Directory: ${target.sourceDirectory}\n`;
-            }
-
-            if (target.fullName) {
-              result += `  Full Name: ${target.fullName}\n`;
-            }
-
-            if (target.artifacts && target.artifacts.length > 0) {
-              result += `  Artifacts:\n${target.artifacts
-                .map((a) => `    - ${a}`)
-                .join("\n")}\n`;
-            }
-
-            if (target.fileGroups && target.fileGroups.length > 0) {
-              result += `  File Groups: ${target.fileGroups.length}\n`;
-              target.fileGroups.forEach((group, idx) => {
-                result += `    Group ${idx + 1}:\n`;
-                if (group.language) {
-                  result += `      Language: ${group.language}\n`;
-                }
-                result += `      Sources: ${group.sources.length} files\n`;
-                if (group.includePath && group.includePath.length > 0) {
-                  result += `      Include Paths: ${group.includePath.length}\n`;
-                }
-              });
-            }
-
-            return result;
-          })
-          .join("\n");
-
-        return {
-          content: [
-            new vscode.LanguageModelTextPart(
-              `CMake Targets (${allTargets.length} found):\n\n${formattedTargets}`
-            ),
-          ],
-        };
-      } catch (error) {
-        return {
-          content: [
-            new vscode.LanguageModelTextPart(`Error getting targets: ${error}`),
           ],
         };
       }

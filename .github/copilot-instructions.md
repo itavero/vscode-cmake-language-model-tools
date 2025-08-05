@@ -12,3 +12,6 @@ The extension itself is written in TypeScript and we use npm scripts to build an
 - Build: `npm run compile`
 - Lint: `npm run lint`
 - Test: `npm run test`
+
+Note: as can be seen in the `package.json`, as a pre-test step both building and linting are run.
+This means you can run `npm test` to build, lint and run the tests in one go.

@@ -62,27 +62,6 @@
         }
       },
       {
-        "name": "get_cmake_targets",
-        "displayName": "Get CMake Targets",
-        "modelDescription": "Retrieves CMake targets from the current project. It describes their type, source directory, artifacts, and other relevant information.",
-        "userDescription": "Get CMake targets from the current project",
-        "canBeReferencedInPrompt": true,
-        "toolReferenceName": "get_cmake_targets",
-        "icon": "$(target)",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "targetNames": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "Optional list of specific target names to retrieve. If not specified, returns all targets."
-            }
-          }
-        }
-      },
-      {
         "name": "build_cmake_target",
         "displayName": "Build CMake Target",
         "modelDescription": "Builds the specified CMake target or all targets if none is specified. This executes the build process for the given targets.",

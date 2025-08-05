@@ -7,7 +7,11 @@
     "commitMessage": "🚀 v${version}",
     "tagName": "v${version}",
     "requireCleanWorkingDir": true,
-    "requireUpstream": true
+    "requireUpstream": true,
+    "requireBranch": [
+      "main",
+      "release*"
+    ]
   },
   "github": {
     "release": true
@@ -17,10 +21,14 @@
   },
   "plugins": {
     "@release-it/keep-a-changelog": {
-      "addVersionUrl": true
+      "addVersionUrl": false
     }
   },
   "hooks": {
+    "before:init": [
+      "npm ci",
+      "npm run test"
+    ],
     "after:bump": "npx dotenv vsce pack -- -o release-${version}.vsix",
     "after:release": "npx dotenv vsce publish -- -i release-${version}.vsix"
   }

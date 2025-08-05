@@ -32,3 +32,13 @@ jobs:
         uses: GabrielBB/xvfb-action@v1.0
         with:
           run: npm test
+      - name: Package extension
+        if: matrix.os == 'ubuntu-latest'
+        run: npm run package
+      - name: Upload artifacts
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vsix-package
+          path: "*.vsix"
+          retention-days: 7

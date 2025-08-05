@@ -1,0 +1,35 @@
+{
+  "$schema": "https://unpkg.com/release-it/schema/release-it.json",
+  "git": {
+    "commit": true,
+    "tag": true,
+    "push": true,
+    "commitMessage": "🚀 v${version}",
+    "tagName": "v${version}",
+    "requireCleanWorkingDir": true,
+    "requireUpstream": true,
+    "requireBranch": [
+      "main",
+      "release*"
+    ]
+  },
+  "github": {
+    "release": true
+  },
+  "npm": {
+    "publish": false
+  },
+  "plugins": {
+    "@release-it/keep-a-changelog": {
+      "addVersionUrl": false
+    }
+  },
+  "hooks": {
+    "before:init": [
+      "npm ci",
+      "npm run test"
+    ],
+    "after:bump": "npx dotenv vsce package -- -o release-${version}.vsix",
+    "after:release": "npx dotenv vsce publish -- -i release-${version}.vsix"
+  }
+}

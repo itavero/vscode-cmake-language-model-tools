@@ -8,6 +8,7 @@ import {
   Version,
   CMakeToolsApi,
   Project,
+  CodeModel,
 } from "vscode-cmake-tools";
 import {
   getCMakeCache,
@@ -40,6 +41,7 @@ export async function activate(context: vscode.ExtensionContext) {
     registerGetCMakeCacheVariableTool(),
     registerGetCMakeTargetsTool(),
     registerBuildCMakeTargetTool(),
+    registerFindCMakeBuildTargetContainingFileTool(),
   ];
 
   context.subscriptions.push(...disposables);
@@ -523,6 +525,232 @@ function registerConfigureCMakeProjectTool(): vscode.Disposable {
           content: [
             new vscode.LanguageModelTextPart(
               `Error configuring CMake project: ${error}`
+            ),
+          ],
+        };
+      }
+    },
+  });
+}
+
+function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
+  return vscode.lm.registerTool("find_cmake_build_target_containing_file", {
+    invoke: async (options, token) => {
+      try {
+        const { file_path } = options.input as { file_path?: string };
+
+        if (!file_path || file_path.trim().length === 0) {
+          return {
+            content: [
+              new vscode.LanguageModelTextPart(
+                "Error: file_path parameter is required"
+              ),
+            ],
+          };
+        }
+
+        const project = await getCurrentProject();
+        if (!project) {
+          return {
+            content: [
+              new vscode.LanguageModelTextPart("No active CMake project found"),
+            ],
+          };
+        }
+
+        const codeModel = project.codeModel;
+        if (!codeModel) {
+          return {
+            content: [
+              new vscode.LanguageModelTextPart(
+                "CMake code model not available. Try configuring the project first."
+              ),
+            ],
+          };
+        }
+
+        // Get all targets from all configurations
+        const allTargets = codeModel.configurations.flatMap((config) =>
+          config.projects.flatMap((proj) => proj.targets)
+        );
+
+        // Normalize the input file path for comparison
+        const normalizedFilePath = path.resolve(file_path);
+
+        // Find targets that directly contain the file in their sources
+        const directMatches: Array<CodeModel.Target> = [];
+
+        // Find targets that can access the file via include directories
+        const includeMatches: Array<{
+          target: CodeModel.Target;
+          withinSourceDir: boolean;
+        }> = [];
+
+        // Find targets that have a source directory that matches the file path
+        const sourceDirMatches: Array<CodeModel.Target> = [];
+
+        for (const target of allTargets) {
+          // Check direct source file matches
+          if (target.fileGroups) {
+            for (const fileGroup of target.fileGroups) {
+              for (const source of fileGroup.sources) {
+                const normalizedSource = path.resolve(source);
+                if (normalizedSource === normalizedFilePath) {
+                  directMatches.push(target);
+                  break;
+                }
+              }
+            }
+          }
+
+          // Check include directory matches
+          if (target.fileGroups) {
+            for (const fileGroup of target.fileGroups) {
+              if (fileGroup.includePath) {
+                for (const includePathObj of fileGroup.includePath) {
+                  const includePath = path.resolve(includePathObj.path);
+                  const fileDir = path.dirname(normalizedFilePath);
+
+                  // Check if the file's directory is within this include path
+                  if (fileDir.startsWith(includePath)) {
+                    const isWithinSourceDir =
+                      target.sourceDirectory !== undefined &&
+                      includePath.startsWith(
+                        path.resolve(target.sourceDirectory)
+                      );
+
+                    includeMatches.push({
+                      target: target,
+                      withinSourceDir: isWithinSourceDir,
+                    });
+                  }
+                }
+              }
+            }
+          }
+
+          // Check if the file path matches the target's source directory
+          if (target.sourceDirectory) {
+            const normalizedSourceDir = path.resolve(target.sourceDirectory);
+            if (normalizedFilePath.startsWith(normalizedSourceDir)) {
+              sourceDirMatches.push(target);
+            }
+          }
+        }
+
+        // Sort include matches to prefer those within source directory
+        includeMatches.sort((a, b) => {
+          if (a.withinSourceDir && !b.withinSourceDir) {
+            return -1;
+          }
+          if (!a.withinSourceDir && b.withinSourceDir) {
+            return 1;
+          }
+          return a.target.name.localeCompare(b.target.name);
+        });
+
+        // Sort source directory matches on the longest source directory first
+        sourceDirMatches.sort((a, b) => {
+          const aLength = a.sourceDirectory?.length ?? 0;
+          const bLength = b.sourceDirectory?.length ?? 0;
+          return bLength - aLength; // Sort descending by length
+        });
+
+        // Direct matches first
+        if (directMatches.length === 1) {
+          return {
+            content: [
+              new vscode.LanguageModelTextPart(
+                `The file \`${file_path}\` is directly included in the \`${
+                  directMatches[0].name
+                }\` target, which has type ${formatTargetType(
+                  directMatches[0].type
+                )}.`
+              ),
+            ],
+          };
+        }
+
+        if (directMatches.length > 1) {
+          let result = `Multiple targets seem to directly include \`${file_path}\`:\n\n`;
+          for (const match of directMatches) {
+            result += `  - ${match.name} (${formatTargetType(match.type)})\n`;
+          }
+
+          return {
+            content: [new vscode.LanguageModelTextPart(result)],
+          };
+        }
+
+        // Include matches
+        if (includeMatches.length > 0) {
+          // Find the match in source directory with the longest path
+          const matchInSourceDir =
+            includeMatches
+              .filter((match) => match.withinSourceDir)
+              .sort((a, b) => {
+                const aLength = a.target.sourceDirectory?.length ?? 0;
+                const bLength = b.target.sourceDirectory?.length ?? 0;
+                return bLength - aLength; // Sort descending by length
+              })[0]?.target ?? undefined;
+
+          let result = `Found ${includeMatches.length} targets that can potentially include file \`${file_path}\`.\n`;
+
+          if (matchInSourceDir !== undefined) {
+            result += `It is likely part of the \`${
+              matchInSourceDir.name
+            }\` target, which has type ${formatTargetType(
+              matchInSourceDir.type
+            )}, as it was found within its source directory.\n\n`;
+          }
+
+          const targetNames = includeMatches
+            .filter((match) => match.target.name !== matchInSourceDir?.name)
+            .map((m) => `${m.target.name} (${formatTargetType(m.target.type)})`)
+            .sort();
+
+          if (targetNames.length > 0) {
+            if (matchInSourceDir !== undefined) {
+              result += `Other targets that can access this file via include paths:\n`;
+            } else {
+              result += `Targets that can access this file via include paths:\n`;
+            }
+            result +=
+              targetNames.map((name) => `  - ${name}`).join("\n") + "\n\n";
+          }
+
+          return {
+            content: [new vscode.LanguageModelTextPart(result)],
+          };
+        }
+
+        // Source directory matches
+        if (sourceDirMatches.length > 0) {
+          return {
+            content: [
+              new vscode.LanguageModelTextPart(
+                `The file \`${file_path}\` is located within the source directory of the \`${
+                  sourceDirMatches[0].name
+                }\` target, which has type ${formatTargetType(
+                  sourceDirMatches[0].type
+                )}. This seems the most likely target to own this file.`
+              ),
+            ],
+          };
+        }
+
+        return {
+          content: [
+            new vscode.LanguageModelTextPart(
+              `Unable to find any targets that include the file \`${file_path}\`.\nThis does not mean that the file is not included by any target, it just means that this tool is unable to find the relation.`
+            ),
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            new vscode.LanguageModelTextPart(
+              `Error finding targets containing file: ${error}`
             ),
           ],
         };

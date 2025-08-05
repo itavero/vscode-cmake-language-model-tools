@@ -47,6 +47,18 @@ This tool builds the specified CMake target (or all targets if none is specified
 
 - `targets` (optional): Array of target names to build. If not specified, builds all targets.
 
+### `#find_cmake_build_target_containing_file`
+
+> State: ✅ **Implemented**
+
+This tool helps to find the CMake target(s) that can build/include a specific file in the workspace.
+It searches for targets that either have the file listed as a source, have an include directory that contains the file, or the target's source directory matches the file's path.
+This is useful for determining which targets to build when testing if a specific file can be compiled successfully.
+
+**Parameters:**
+
+- `file_path` (required): The path to the file to search for in CMake targets. Can be absolute or relative to the workspace.
+
 ## Requirements
 
 - VS Code 1.102.0 or later
@@ -66,6 +78,7 @@ Of course, it will only provide real data as soon as the CMake Tools extension h
 - "What targets are available in this project?" → Uses `#get_cmake_targets`
 - "Get the value of CMAKE_BUILD_TYPE from the cache" → Uses `#get_cmake_cache_variable`
 - "Build the main target" → Uses `#build_cmake_target`
+- "Which targets should I build to test src/math.h?" → Uses `#find_cmake_build_target_containing_file`
 
 ## Development
 

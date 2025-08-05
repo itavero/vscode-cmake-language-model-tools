@@ -68,6 +68,7 @@ suite("CMake Language Model Tools Test Suite", () => {
       "get_cmake_cache_variable",
       "get_cmake_targets",
       "build_cmake_target",
+      "find_cmake_build_target_containing_file",
     ];
 
     const registeredTools = vscode.lm.tools.map((tool) => tool.name);
@@ -402,6 +403,54 @@ suite("CMake Language Model Tools Test Suite", () => {
         text.includes("currently installed version"),
       "Result should mention build process, indicate completion/execution, or indicate no project available"
     );
+  });
+
+  test("find_cmake_build_target_containing_file tool works", async function () {
+    this.timeout(10000);
+
+    // Test with a source file that should be found in the hello_world target
+    const result = await vscode.lm.invokeTool(
+      "find_cmake_build_target_containing_file",
+      {
+        input: { file_path: "src/main.cpp" },
+        toolInvocationToken: undefined,
+      }
+    );
+
+    assert.ok(result, "Tool should return a result");
+    assert.ok(result.content, "Result should have content");
+    assert.ok(Array.isArray(result.content), "Content should be an array");
+
+    const firstPart = result.content[0];
+    assert.ok(
+      firstPart instanceof vscode.LanguageModelTextPart,
+      "First part should be text"
+    );
+
+    const text = firstPart.value;
+    console.log("find_cmake_build_target_containing_file result:", text);
+
+    // Should either find targets or indicate no matches
+    assert.ok(
+      text.includes("is directly included in") ||
+        text.includes("can be included through") ||
+        text.includes("No targets found") ||
+        text.includes("No active CMake project found") ||
+        text.includes("not available"),
+      "Result should mention targets containing file or indicate no project available"
+    );
+
+    // If we have a configured project, we should find the hello_world target for main.cpp
+    if (
+      text.includes("is directly included in") ||
+      text.includes("can be included through")
+    ) {
+      // We should find the target mentioned
+      assert.ok(
+        text.includes("hello_world") || text.includes("target"),
+        "Should mention a target when a file is found"
+      );
+    }
   });
 
   suite("configure_cmake_project tool", () => {

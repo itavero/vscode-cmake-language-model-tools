@@ -8,14 +8,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ### Added
 
-- Initial implementation of all planned CMake language model tools:
-  - `get_cmake_project_info` - Returns comprehensive project information including source/build directories and targets summary
+- Initial implementation of the following tools (thanks to Copilot for the help):
+  - `get_cmake_project_info` - Returns comprehensive project information including source/build directories and targets with types
   - `get_cmake_cache_variable` - Retrieves a single value from the CMake cache
   - `get_cmake_cache` - Retrieves the entire contents of the CMake cache
   - `get_cmake_targets` - Retrieves CMake targets from the current project
   - `get_active_cmake_build_type` - Retrieves the currently selected build type
   - `build_cmake_target` - Builds specified CMake targets
-- Integration with CMake Tools extension API
-- Automatic activation when CMakeLists.txt is detected in workspace
-- Comprehensive error handling and user feedback
-- Support for input parameters where applicable
+  - `configure_cmake_project` - Configures/reconfigures the CMake project
+  - `find_cmake_build_target_containing_file` - Finds CMake targets that contain or can access a specific file through source files or include directories

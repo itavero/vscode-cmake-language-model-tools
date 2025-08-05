@@ -120,6 +120,27 @@
             }
           }
         }
+      },
+      {
+        "name": "find_cmake_build_target_containing_file",
+        "displayName": "Find CMake Build Target Containing File",
+        "modelDescription": "Helps to find the CMake target(s) that can build/include a specific file in the workspace. It searches for targets that either have the file listed as a source, have an include directory that contains the file, or the target's source directory matches the file's path. This is useful for determining which targets to build when testing if a specific file can be compiled successfully.",
+        "userDescription": "Find CMake targets that can build/include a specific file",
+        "canBeReferencedInPrompt": true,
+        "toolReferenceName": "find_cmake_build_target_containing_file",
+        "icon": "$(search)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "file_path": {
+              "type": "string",
+              "description": "The path to the file to search for in CMake targets. Can be absolute or relative to the workspace."
+            }
+          },
+          "required": [
+            "file_path"
+          ]
+        }
       }
     ]
   },

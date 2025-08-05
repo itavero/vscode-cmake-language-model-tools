@@ -29,7 +29,7 @@
       "npm ci",
       "npm run test"
     ],
-    "after:bump": "npx dotenv vsce package -- -o release-${version}.vsix",
+    "before:git:release": "npx dotenv vsce package -- -o release-${version}.vsix",
     "after:release": "npx dotenv vsce publish -- -i release-${version}.vsix"
   }
 }

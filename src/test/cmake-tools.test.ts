@@ -536,7 +536,7 @@ suite("CMake Language Model Tools Test Suite", () => {
       }
     });
 
-    test("should include exit code and stdout/stderr in output", async function () {
+    test("should include exit code and stdout/stderr in output when API supports it", async function () {
       this.timeout(30000);
 
       const result = await vscode.lm.invokeTool("configure_cmake_project", {
@@ -556,28 +556,50 @@ suite("CMake Language Model Tools Test Suite", () => {
       const text = firstPart.value;
       console.log("configure_cmake_project output format test:", text);
 
-      // Check that the output includes structured information
+      // Check that the output includes basic success information
       if (!text.includes("No active") && !text.includes("Error configuring")) {
-        // If there's an active project and no error, check for structured output
+        // If there's an active project and no error, check for success indication
         assert.ok(
-          text.includes("Exit code:") || text.includes("exit code"),
-          "Result should include exit code information"
+          text.includes("successfully") ||
+            text.includes("completed") ||
+            text.includes("configured") ||
+            text.includes("being configured") ||
+            text.includes("being reconfigured"),
+          "Result should indicate successful completion or ongoing configuration"
         );
 
-        // Should have stdout and/or stderr sections
-        assert.ok(
-          text.includes("Standard output:") || text.includes("Error output:"),
-          "Result should include stdout or stderr sections"
-        );
-
-        // Specifically check for our CMake messages in the appropriate sections
-        if (text.includes("Standard output:")) {
+        // Check for detailed output if newer API is available, otherwise just note limitation
+        if (
+          text.includes("Detailed output") &&
+          text.includes("not available")
+        ) {
+          // Older API - check that limitation is properly communicated
           assert.ok(
-            text.includes(
-              "LANGUAGE MODEL: This should end up in the std output"
-            ),
-            "Standard output section should contain our STATUS message"
+            text.includes("currently installed version"),
+            "Should inform about API limitation with current version"
           );
+        } else {
+          // Newer API available - check for structured output
+          assert.ok(
+            text.includes("Exit code:") || text.includes("exit code"),
+            "Result should include exit code information with newer API"
+          );
+
+          // Should have stdout and/or stderr sections
+          assert.ok(
+            text.includes("Standard output:") || text.includes("Error output:"),
+            "Result should include stdout or stderr sections with newer API"
+          );
+
+          // Specifically check for our CMake messages in the appropriate sections
+          if (text.includes("Standard output:")) {
+            assert.ok(
+              text.includes(
+                "LANGUAGE MODEL: This should end up in the std output"
+              ),
+              "Standard output section should contain our STATUS message"
+            );
+          }
         }
       }
     });
@@ -642,6 +664,9 @@ suite("CMake Language Model Tools Test Suite", () => {
       // The configuration tool should have completed successfully
       assert.ok(
         configText.includes("reconfigured successfully") ||
+          configText.includes("configured successfully") ||
+          configText.includes("being reconfigured") ||
+          configText.includes("being configured") ||
           configText.includes("Error configuring"),
         "Configuration should complete successfully or show error"
       );

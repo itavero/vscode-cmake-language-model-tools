@@ -372,33 +372,65 @@ function registerConfigureCMakeProjectTool(): vscode.Disposable {
 
         // Determine which method to use based on delete_cache parameter
         const shouldDeleteCache = delete_cache === true;
-
-        let result;
-        if (shouldDeleteCache) {
-          result = await project.reconfigureWithResult(token);
-        } else {
-          result = await project.configureWithResult(token);
-        }
-
-        const statusText =
-          result.exitCode === 0 ? "successfully" : "with errors";
         const configAction = shouldDeleteCache ? "reconfigured" : "configured";
 
-        let responseText = `CMake project ${configAction} **${statusText}**. Exit code: \`${result.exitCode}\`\n\n`;
+        // Check if the newer API methods with result are available
+        const hasResultMethods = shouldDeleteCache
+          ? typeof (project as any).reconfigureWithResult === "function"
+          : typeof (project as any).configureWithResult === "function";
 
-        // Include stderr if present
-        if (result.stderr) {
-          responseText += `\n\nError output:\n\`\`\`\n${result.stderr}\n\`\`\`\n\n`;
+        if (hasResultMethods) {
+          // Use newer API that returns result with stdout/stderr
+          let result;
+          if (shouldDeleteCache) {
+            result = await (project as any).reconfigureWithResult(token);
+          } else {
+            result = await (project as any).configureWithResult(token);
+          }
+
+          const statusText =
+            result.exitCode === 0 ? "successfully" : "with errors";
+          let responseText = `CMake project ${configAction} **${statusText}**. Exit code: \`${result.exitCode}\`\n\n`;
+
+          // Include stderr if present
+          if (result.stderr) {
+            responseText += `\n\nError output:\n\`\`\`\n${result.stderr}\n\`\`\`\n\n`;
+          }
+
+          // Include stdout if present
+          if (result.stdout) {
+            responseText += `\n\nStandard output:\n\`\`\`\n${result.stdout}\n\`\`\``;
+          }
+
+          return {
+            content: [new vscode.LanguageModelTextPart(responseText)],
+          };
+        } else {
+          // Fallback to older API methods without result
+          try {
+            if (shouldDeleteCache) {
+              await (project as any).reconfigure();
+            } else {
+              await (project as any).configure();
+            }
+
+            let responseText = `CMake project is being ${configAction}.\n`;
+            responseText += `Detailed output (stdout/stderr) and exit code are not available with the currently installed version of the CMake Tools extension.\n`;
+
+            return {
+              content: [new vscode.LanguageModelTextPart(responseText)],
+            };
+          } catch (configError) {
+            return {
+              content: [
+                new vscode.LanguageModelTextPart(
+                  `CMake project configuration failed: ${configError}\n\n` +
+                    `*Note: Detailed output information is not available with the currently installed version of the CMake Tools extension.*`
+                ),
+              ],
+            };
+          }
         }
-
-        // Include stdout if present
-        if (result.stdout) {
-          responseText += `\n\nStandard output:\n\`\`\`\n${result.stdout}\n\`\`\``;
-        }
-
-        return {
-          content: [new vscode.LanguageModelTextPart(responseText)],
-        };
       } catch (error) {
         return {
           content: [

@@ -75,6 +75,12 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(...disposables);
 }
 
+/**
+ * Converts a string from UPPER_SNAKE_CASE to Pascal Case with spaces.
+ * For example: "STATIC_LIBRARY" => "Static Library"
+ * @param type The UPPER_SNAKE_CASE string to convert.
+ * @returns The converted string in Pascal Case with spaces.
+ */
 function formatTargetType(type: string): string {
   // Convert UPPER_SNAKE_CASE to "Pascal Case" with spaces
   return type
@@ -156,6 +162,15 @@ function escapeRegex(string: string): string {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * Returns the root directory of the current workspace for CMake operations.
+ * 
+ * Attempts to obtain the active folder path from the CMake Tools API first.
+ * If unavailable, falls back to the first workspace folder in VS Code.
+ * If no workspace is available, returns an empty string.
+ *
+ * @returns {string} The workspace root directory path, or an empty string if not available.
+ */
 function getWorkspaceRoot(): string {
   // Try to get the active folder path from CMake Tools API first
   const activeFolderPath = cmakeToolsApi?.getActiveFolderPath();
@@ -173,6 +188,18 @@ function getWorkspaceRoot(): string {
   return "";
 }
 
+/**
+ * Calculates the relative path from the workspace root to the given source directory.
+ *
+ * @param sourceDirectory The absolute or relative path to the source directory. If undefined, the function returns undefined.
+ * @param workspaceRoot The absolute or relative path to the workspace root.
+ * @returns The relative path from the workspace root to the source directory, or undefined if:
+ *   - sourceDirectory is not provided,
+ *   - sourceDirectory is the same as the workspace root,
+ *   - sourceDirectory is not within the workspace root,
+ *   - an error occurs during path resolution.
+ * This is useful for displaying or storing paths relative to the workspace, rather than absolute paths.
+ */
 function getRelativeSourceDirectory(
   sourceDirectory: string | undefined,
   workspaceRoot: string
@@ -723,6 +750,21 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
   });
 }
 
+/**
+ * Retrieves the current active CMake project with a valid code model.
+ * 
+ * This function uses the CMake Tools API to get the active folder and project.
+ * It throws an error if the API is unavailable, if there is no active project,
+ * or if the project's code model is not available (e.g., before configuration).
+ * 
+ * The returned project is type-asserted to `ProjectWithCodeModel` because the
+ * function ensures that the `codeModel` property is present before returning.
+ * 
+ * @throws {Error} If the CMake Tools API is not available.
+ * @throws {Error} If there is no active CMake project.
+ * @throws {Error} If the project's code model is not available.
+ * @returns {Promise<ProjectWithCodeModel>} The current project with a code model.
+ */
 async function getCurrentProject(): Promise<ProjectWithCodeModel> {
   if (!cmakeToolsApi) {
     throw new Error("CMake Tools API not available");

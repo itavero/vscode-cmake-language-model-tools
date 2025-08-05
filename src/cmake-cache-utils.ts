@@ -13,9 +13,15 @@ export interface CMakeCacheVariable {
   documentation?: string;
 }
 
-// Regex for valid CMake variable names (CMP0053): starts with letter/underscore,
-// contains alphanumeric, underscore, hyphen, dot, slash, plus
-// Also captures TYPE and VALUE, excluding -ADVANCED variables
+/**
+ * Regex for valid CMake variable names according to CMP0053:
+ * - Variable names must start with a letter (A-Z, a-z) or underscore (_)
+ * - Subsequent characters may be letters, digits (0-9), underscore (_), hyphen (-), dot (.), slash (/), or plus (+)
+ * - This matches the rules described in CMake's CMP0053 policy:
+ *   https://cmake.org/cmake/help/latest/policy/CMP0053.html
+ * - The regex also captures TYPE and VALUE fields, and excludes -ADVANCED variables (which are metadata)
+ * Example valid names: MY_VAR, _my-var, Path/To.File+Name
+ */
 const variableRegex = /^([A-Za-z_][A-Za-z0-9_\-./+]*):([^=]+)=(.*)$/;
 
 /**

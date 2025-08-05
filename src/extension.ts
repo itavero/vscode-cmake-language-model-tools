@@ -123,11 +123,11 @@ function registerGetCMakeProjectInfoTool(): vscode.Disposable {
         if (allTargets.length > 0) {
           // Sort targets alphabetically by name
           result += allTargets
+            .sort((a, b) => a.name.localeCompare(b.name))
             .map(
               (target) =>
                 "- " + targetToTextRepresentation(target, workspaceRoot)
             )
-            .sort()
             .join("\n");
         } else {
           result += "  No targets found\n";
@@ -194,7 +194,7 @@ function targetToTextRepresentation(
       : "defined in `" +
         getRelativeOrAbsoluteSourcePath(target.sourceDirectory, workspaceRoot) +
         "`";
-  return `\`${target.name}\` (${formatTargetType(
+  return `${'`' + target.name + '`'} (${formatTargetType(
     target.type
   )} ${sourceDescription})`;
 }

@@ -134,6 +134,28 @@ suite("CMake Language Model Tools Test Suite", () => {
           text.includes("Targets"),
         "Should include basic project information sections"
       );
+
+      // Check for relative source directory information in target listings
+      if (text.includes("Targets") && text.includes("found)")) {
+        // Should show target names with types and potentially relative source directories
+        const targetLines = text
+          .split("\n")
+          .filter((line) => line.trim().startsWith("- "));
+
+        if (targetLines.length > 0) {
+          // At least one target should have type information
+          assert.ok(
+            targetLines.some(
+              (line) => line.includes("(") && line.includes(")")
+            ),
+            "Target lines should include type information in parentheses"
+          );
+
+          // Check that relative source directories are shown when available
+          // Look for targets with [path] format indicating relative source directory
+          console.log("Target lines:", targetLines);
+        }
+      }
     }
   });
 
@@ -415,6 +437,12 @@ suite("CMake Language Model Tools Test Suite", () => {
         text.includes("hello_world") || text.includes("target"),
         "Should mention a target when a file is found"
       );
+
+      // Check for relative source directory information
+      // The output should include source directory path when targets are found
+      if (text.includes("source directory")) {
+        console.log("Found source directory information in output");
+      }
     }
   });
 

@@ -105,14 +105,22 @@ function registerGetCMakeProjectInfoTool(): vscode.Disposable {
         if (allTargets.length > 0) {
           // Sort targets alphabetically by name
           const sortedTargets = allTargets
-            .map((target) => ({
-              name: target.name,
-              type: formatTargetType(target.type),
-            }))
+            .map((target) => {
+              const relativeSourceDir = getRelativeSourceDirectory(target.sourceDirectory, activeFolderPath || "");
+              return {
+                name: target.name,
+                type: formatTargetType(target.type),
+                relativeSourceDir: relativeSourceDir,
+              };
+            })
             .sort((a, b) => a.name.localeCompare(b.name));
 
           sortedTargets.forEach((target) => {
-            result += `  - ${target.name} (${target.type})\n`;
+            let targetInfo = `  - ${target.name} (${target.type})`;
+            if (target.relativeSourceDir) {
+              targetInfo += ` [${target.relativeSourceDir}]`;
+            }
+            result += targetInfo + "\n";
           });
         } else {
           result += "  No targets found\n";
@@ -137,6 +145,28 @@ function registerGetCMakeProjectInfoTool(): vscode.Disposable {
 function escapeRegex(string: string): string {
   // $& means the whole matched string
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function getRelativeSourceDirectory(sourceDirectory: string | undefined, workspaceRoot: string): string | undefined {
+  if (!sourceDirectory) {
+    return undefined;
+  }
+  
+  try {
+    const normalizedSourceDir = path.resolve(sourceDirectory);
+    const normalizedWorkspaceRoot = path.resolve(workspaceRoot);
+    
+    // Check if the source directory is within the workspace
+    if (normalizedSourceDir.startsWith(normalizedWorkspaceRoot)) {
+      const relativePath = path.relative(normalizedWorkspaceRoot, normalizedSourceDir);
+      // Return undefined if it's the root directory (empty string)
+      return relativePath || undefined;
+    }
+  } catch (error) {
+    console.warn("Error calculating relative source directory:", error);
+  }
+  
+  return undefined;
 }
 
 function registerGetCMakeCacheVariableTool(): vscode.Disposable {
@@ -555,23 +585,27 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
 
         // Direct matches first
         if (directMatches.length === 1) {
+          const target = directMatches[0];
+          const relativeSourceDir = getRelativeSourceDirectory(target.sourceDirectory, cmakeToolsApi?.getActiveFolderPath() || "");
+          let message = `The file \`${file_path}\` is directly included in the \`${target.name}\` target, which has type ${formatTargetType(target.type)}.`;
+          if (relativeSourceDir) {
+            message += ` The target's source directory is at \`${relativeSourceDir}\`.`;
+          }
           return {
-            content: [
-              new vscode.LanguageModelTextPart(
-                `The file \`${file_path}\` is directly included in the \`${
-                  directMatches[0].name
-                }\` target, which has type ${formatTargetType(
-                  directMatches[0].type
-                )}.`
-              ),
-            ],
+            content: [new vscode.LanguageModelTextPart(message)],
           };
         }
 
         if (directMatches.length > 1) {
+          const workspaceRoot = cmakeToolsApi?.getActiveFolderPath() || "";
           let result = `Multiple targets seem to directly include \`${file_path}\`:\n\n`;
           for (const match of directMatches) {
-            result += `  - ${match.name} (${formatTargetType(match.type)})\n`;
+            const relativeSourceDir = getRelativeSourceDirectory(match.sourceDirectory, workspaceRoot);
+            let targetInfo = `  - ${match.name} (${formatTargetType(match.type)})`;
+            if (relativeSourceDir) {
+              targetInfo += ` [${relativeSourceDir}]`;
+            }
+            result += targetInfo + "\n";
           }
 
           return {
@@ -581,6 +615,8 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
 
         // Include matches
         if (includeMatches.length > 0) {
+          const workspaceRoot = cmakeToolsApi?.getActiveFolderPath() || "";
+          
           // Find the match in source directory with the longest path
           const matchInSourceDir =
             includeMatches
@@ -594,16 +630,24 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
           let result = `Found ${includeMatches.length} targets that can potentially include file \`${file_path}\`.\n`;
 
           if (matchInSourceDir !== undefined) {
-            result += `It is likely part of the \`${
-              matchInSourceDir.name
-            }\` target, which has type ${formatTargetType(
-              matchInSourceDir.type
-            )}, as it was found within its source directory.\n\n`;
+            const relativeSourceDir = getRelativeSourceDirectory(matchInSourceDir.sourceDirectory, workspaceRoot);
+            let message = `It is likely part of the \`${matchInSourceDir.name}\` target, which has type ${formatTargetType(matchInSourceDir.type)}, as it was found within its source directory`;
+            if (relativeSourceDir) {
+              message += ` at \`${relativeSourceDir}\``;
+            }
+            result += message + ".\n\n";
           }
 
           const targetNames = includeMatches
             .filter((match) => match.target.name !== matchInSourceDir?.name)
-            .map((m) => `${m.target.name} (${formatTargetType(m.target.type)})`)
+            .map((m) => {
+              const relativeSourceDir = getRelativeSourceDirectory(m.target.sourceDirectory, workspaceRoot);
+              let targetInfo = `${m.target.name} (${formatTargetType(m.target.type)})`;
+              if (relativeSourceDir) {
+                targetInfo += ` [${relativeSourceDir}]`;
+              }
+              return targetInfo;
+            })
             .sort();
 
           if (targetNames.length > 0) {
@@ -623,16 +667,18 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
 
         // Source directory matches
         if (sourceDirMatches.length > 0) {
+          const target = sourceDirMatches[0];
+          const workspaceRoot = cmakeToolsApi?.getActiveFolderPath() || "";
+          const relativeSourceDir = getRelativeSourceDirectory(target.sourceDirectory, workspaceRoot);
+          
+          let message = `The file \`${file_path}\` is located within the source directory of the \`${target.name}\` target, which has type ${formatTargetType(target.type)}`;
+          if (relativeSourceDir) {
+            message += ` at \`${relativeSourceDir}\``;
+          }
+          message += ". This seems the most likely target to own this file.";
+          
           return {
-            content: [
-              new vscode.LanguageModelTextPart(
-                `The file \`${file_path}\` is located within the source directory of the \`${
-                  sourceDirMatches[0].name
-                }\` target, which has type ${formatTargetType(
-                  sourceDirMatches[0].type
-                )}. This seems the most likely target to own this file.`
-              ),
-            ],
+            content: [new vscode.LanguageModelTextPart(message)],
           };
         }
 

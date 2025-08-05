@@ -37,7 +37,7 @@
       {
         "name": "get_cmake_project_info",
         "displayName": "Get CMake Project Info",
-        "modelDescription": "Returns comprehensive information about the CMake project including source directory, build directory, and a list of all targets with their types. This provides a high-level overview of the project structure and available build targets.",
+        "modelDescription": "Returns comprehensive information about the CMake project including source directory, build directory, and a list of all targets with their types and relative source directories (when within the workspace). This provides a high-level overview of the project structure and available build targets.",
         "userDescription": "Get comprehensive information about the current CMake project",
         "canBeReferencedInPrompt": true,
         "toolReferenceName": "get_cmake_project_info",
@@ -103,7 +103,7 @@
       {
         "name": "find_cmake_build_target_containing_file",
         "displayName": "Find CMake Build Target Containing File",
-        "modelDescription": "Helps to find the CMake target(s) that can build/include a specific file in the workspace. It searches for targets that either have the file listed as a source, have an include directory that contains the file, or the target's source directory matches the file's path. This is useful for determining which targets to build when testing if a specific file can be compiled successfully.",
+        "modelDescription": "Helps to find the CMake target(s) that can build/include a specific file in the workspace. It searches for targets that either have the file listed as a source, have an include directory that contains the file, or the target's source directory matches the file's path. Returns target information including their relative source directories (when within the workspace) to help locate associated CMakeLists.txt files. This is useful for determining which targets to build when testing if a specific file can be compiled successfully.",
         "userDescription": "Find CMake targets that can build/include a specific file",
         "canBeReferencedInPrompt": true,
         "toolReferenceName": "find_cmake_build_target_containing_file",

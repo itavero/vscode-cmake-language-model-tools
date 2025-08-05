@@ -10,11 +10,11 @@ This extension provides several language model tools that enable Copilot to acce
 
 Below is a list of language model tools that are provided by this extension.
 
-### `#get_cmake_build_directory`
+### `#get_cmake_project_info`
 
 > State: ✅ **Implemented**
 
-This tool returns the build directory for the current CMake project. It is useful for understanding where the build artifacts are located. Especially useful if you have multiple configurations with different build directories, and you want to know which one is currently active.
+This tool returns comprehensive information about the current CMake project including the source directory, build directory, and an alphabetically sorted list of all targets with their types. It provides a high-level overview of the project structure and available build targets.
 
 ### `#get_cmake_cache_variable`
 
@@ -62,7 +62,7 @@ Of course, it will only provide real data as soon as the CMake Tools extension h
 
 ## Example Usage
 
-- "Show me the CMake build directory" → Uses `#get_cmake_build_directory`
+- "Show me an overview of this CMake project" → Uses `#get_cmake_project_info`
 - "What targets are available in this project?" → Uses `#get_cmake_targets`
 - "Get the value of CMAKE_BUILD_TYPE from the cache" → Uses `#get_cmake_cache_variable`
 - "Build the main target" → Uses `#build_cmake_target`

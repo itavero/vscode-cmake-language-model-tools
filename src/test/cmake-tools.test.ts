@@ -63,11 +63,11 @@ suite("CMake Language Model Tools Test Suite", () => {
 
   test("All language model tools are registered", () => {
     const expectedTools = [
-      "get_cmake_build_directory",
+      "configure_cmake_project",
+      "get_cmake_project_info",
       "get_cmake_cache_variable",
       "get_cmake_targets",
       "build_cmake_target",
-      "configure_cmake_project",
     ];
 
     const registeredTools = vscode.lm.tools.map((tool) => tool.name);
@@ -95,11 +95,11 @@ suite("CMake Language Model Tools Test Suite", () => {
     }
   });
 
-  test("get_cmake_build_directory tool works", async function () {
+  test("get_cmake_project_info tool works", async function () {
     this.timeout(10000);
 
     // Test our actual language model tool
-    const result = await vscode.lm.invokeTool("get_cmake_build_directory", {
+    const result = await vscode.lm.invokeTool("get_cmake_project_info", {
       input: {},
       toolInvocationToken: undefined,
     });
@@ -116,17 +116,25 @@ suite("CMake Language Model Tools Test Suite", () => {
     );
 
     const text = firstPart.value;
-    console.log("get_cmake_build_directory result:", text);
+    console.log("get_cmake_project_info result:", text);
 
-    // Should either return a build directory path or indicate none is configured
+    // Should return project information including source dir, build dir, and targets
     assert.ok(
-      text.includes("build") ||
-        text.includes("No") ||
-        text.includes("not configured") ||
-        text.includes("/") ||
-        text.includes("\\"), // Could be an actual path
-      "Result should mention build directory, path, or indicate none configured"
+      text.includes("CMake Project Information") ||
+        text.includes("No active CMake project found") ||
+        text.includes("not available"),
+      `Expected project info, got: ${text}`
     );
+
+    // If we have project info, check for expected sections
+    if (text.includes("CMake Project Information")) {
+      assert.ok(
+        text.includes("Source Directory") ||
+          text.includes("Build Directory") ||
+          text.includes("Targets"),
+        "Should include basic project information sections"
+      );
+    }
   });
 
   suite("get_cmake_cache_variable tool", () => {
@@ -374,6 +382,7 @@ suite("CMake Language Model Tools Test Suite", () => {
     console.log("build_cmake_target result:", text);
 
     // Should either indicate build started/completed or that no project is available
+    // Can include new API results (with exit codes) or old API messages
     assert.ok(
       text.includes("build") ||
         text.includes("Build") ||
@@ -386,8 +395,12 @@ suite("CMake Language Model Tools Test Suite", () => {
         text.includes("failed") ||
         text.includes("building") ||
         text.includes("Building") ||
-        text.includes("configured"),
-      "Result should mention build process or indicate no project available"
+        text.includes("configured") ||
+        text.includes("completed") ||
+        text.includes("being executed") ||
+        text.includes("Exit code") ||
+        text.includes("currently installed version"),
+      "Result should mention build process, indicate completion/execution, or indicate no project available"
     );
   });
 

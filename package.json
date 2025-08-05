@@ -35,13 +35,13 @@
   "contributes": {
     "languageModelTools": [
       {
-        "name": "get_cmake_build_directory",
-        "displayName": "Get CMake Build Directory",
-        "modelDescription": "Returns the build directory for the CMake project and the active configuration. This is useful for understanding where the build artifacts are located, especially if you have multiple configurations with different build directories. Within the build directory, there's typically several useful files like a compile_commands.json file that describes how sources are compiled.",
-        "userDescription": "Get the build directory for the current CMake project and configuration",
+        "name": "get_cmake_project_info",
+        "displayName": "Get CMake Project Info",
+        "modelDescription": "Returns comprehensive information about the CMake project including source directory, build directory, and a list of all targets with their types. This provides a high-level overview of the project structure and available build targets.",
+        "userDescription": "Get comprehensive information about the current CMake project",
         "canBeReferencedInPrompt": true,
-        "toolReferenceName": "get_cmake_build_directory",
-        "icon": "$(file-binary)"
+        "toolReferenceName": "get_cmake_project_info",
+        "icon": "$(info)"
       },
       {
         "name": "get_cmake_cache_variable",

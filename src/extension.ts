@@ -35,18 +35,27 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Register all the language model tools
   const disposables = [
-    registerGetCMakeBuildDirectoryTool(),
+    registerConfigureCMakeProjectTool(),
+    registerGetCMakeProjectInfoTool(),
     registerGetCMakeCacheVariableTool(),
     registerGetCMakeTargetsTool(),
     registerBuildCMakeTargetTool(),
-    registerConfigureCMakeProjectTool(),
   ];
 
   context.subscriptions.push(...disposables);
 }
 
-function registerGetCMakeBuildDirectoryTool(): vscode.Disposable {
-  return vscode.lm.registerTool("get_cmake_build_directory", {
+function formatTargetType(type: string): string {
+  // Convert UPPER_SNAKE_CASE to "Pascal Case" with spaces
+  return type
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ")
+    .trim();
+}
+
+function registerGetCMakeProjectInfoTool(): vscode.Disposable {
+  return vscode.lm.registerTool("get_cmake_project_info", {
     invoke: async (options, token) => {
       try {
         const project = await getCurrentProject();
@@ -58,29 +67,64 @@ function registerGetCMakeBuildDirectoryTool(): vscode.Disposable {
           };
         }
 
-        const buildDir = await project.getBuildDirectory();
-        if (!buildDir) {
+        const codeModel = project.codeModel;
+        if (!codeModel) {
           return {
             content: [
               new vscode.LanguageModelTextPart(
-                "Build directory not configured"
+                "CMake code model not available. Try configuring the project first."
               ),
             ],
           };
         }
 
+        let result = "CMake Project Information:\n\n";
+
+        // Get active folder path as source directory
+        const activeFolderPath = cmakeToolsApi?.getActiveFolderPath();
+        if (activeFolderPath) {
+          result += `Source Directory: ${activeFolderPath}\n`;
+        }
+
+        // Get build directory
+        const buildDir = await project.getBuildDirectory();
+        if (buildDir) {
+          result += `Build Directory: ${buildDir}\n`;
+        } else {
+          result += `Build Directory: Not configured\n`;
+        }
+
+        // Get targets information (summary)
+        const allTargets = codeModel.configurations.flatMap((config) =>
+          config.projects.flatMap((proj) => proj.targets)
+        );
+
+        result += `\nTargets (${allTargets.length} found):\n`;
+
+        if (allTargets.length > 0) {
+          // Sort targets alphabetically by name
+          const sortedTargets = allTargets
+            .map((target) => ({
+              name: target.name,
+              type: formatTargetType(target.type),
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+          sortedTargets.forEach((target) => {
+            result += `  - ${target.name} (${target.type})\n`;
+          });
+        } else {
+          result += "  No targets found\n";
+        }
+
         return {
-          content: [
-            new vscode.LanguageModelTextPart(
-              `CMake build directory: ${buildDir}`
-            ),
-          ],
+          content: [new vscode.LanguageModelTextPart(result)],
         };
       } catch (error) {
         return {
           content: [
             new vscode.LanguageModelTextPart(
-              `Error getting build directory: ${error}`
+              `Error getting project info: ${error}`
             ),
           ],
         };
@@ -326,23 +370,66 @@ function registerBuildCMakeTargetTool(): vscode.Disposable {
           targets && targets.length > 0 ? targets : undefined;
         const targetText = buildTargets ? targets!.join(", ") : "all targets";
 
-        try {
-          await project.build(buildTargets);
-          return {
-            content: [
-              new vscode.LanguageModelTextPart(
-                `Successfully built ${targetText}`
-              ),
-            ],
-          };
-        } catch (buildError) {
-          return {
-            content: [
-              new vscode.LanguageModelTextPart(
-                `Build failed for ${targetText}: ${buildError}`
-              ),
-            ],
-          };
+        // Check if the newer API method with result is available
+        const hasBuildWithResult =
+          typeof (project as any).buildWithResult === "function";
+
+        if (hasBuildWithResult) {
+          // Use newer API that returns result with stdout/stderr
+          try {
+            const result = await (project as any).buildWithResult(
+              buildTargets,
+              token
+            );
+
+            const statusText =
+              result.exitCode === 0 ? "successfully" : "with errors";
+            let responseText = `Build for ${targetText} completed **${statusText}**. Exit code: \`${result.exitCode}\`\n\n`;
+
+            // Include stderr if present
+            if (result.stderr) {
+              responseText += `\n\nError output:\n\`\`\`\n${result.stderr}\n\`\`\`\n\n`;
+            }
+
+            // Include stdout if present
+            if (result.stdout) {
+              responseText += `\n\nStandard output:\n\`\`\`\n${result.stdout}\n\`\`\``;
+            }
+
+            return {
+              content: [new vscode.LanguageModelTextPart(responseText)],
+            };
+          } catch (buildError) {
+            return {
+              content: [
+                new vscode.LanguageModelTextPart(
+                  `Build failed for ${targetText}: ${buildError}\n\n` +
+                    `*Note: This error occurred with the enhanced CMake Tools API.*`
+                ),
+              ],
+            };
+          }
+        } else {
+          // Fallback to older API method without result
+          try {
+            await project.build(buildTargets);
+
+            let responseText = `Build for ${targetText} is being executed.\n`;
+            responseText += `Detailed output (stdout/stderr) and exit code are not available with the currently installed version of the CMake Tools extension.\n`;
+
+            return {
+              content: [new vscode.LanguageModelTextPart(responseText)],
+            };
+          } catch (buildError) {
+            return {
+              content: [
+                new vscode.LanguageModelTextPart(
+                  `Build failed for ${targetText}: ${buildError}\n\n` +
+                    `*Note: Detailed output information is not available with the currently installed version of the CMake Tools extension.*`
+                ),
+              ],
+            };
+          }
         }
       } catch (error) {
         return {

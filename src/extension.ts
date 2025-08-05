@@ -664,7 +664,10 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
           let result = `Found ${includeMatches.length} targets that can potentially include file \`${file_path}\`.\n`;
 
           if (matchInSourceDir !== undefined) {
-            result += `It is likely part of target ${matchInSourceDir.name}, as it was found within an include directory inside the target's source directory.\n\n`;
+            result += `It is likely part of target ${targetToTextRepresentation(
+              matchInSourceDir,
+              workspaceRoot
+            )}, as it was found within an include directory inside the target's source directory.\n\n`;
           }
 
           const targetNames = includeMatches

@@ -19,6 +19,35 @@ import {
 
 let cmakeToolsApi: CMakeToolsApi | undefined;
 
+// Type that guarantees codeModel is available
+interface ProjectWithCodeModel extends Project {
+  readonly codeModel: CodeModel.Content;
+}
+
+// Standardized error handling for language model tools
+function createErrorResponse(
+  toolName: string,
+  error: unknown
+): vscode.LanguageModelToolResult {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  return {
+    content: [
+      new vscode.LanguageModelTextPart(`Error in ${toolName}: ${errorMessage}`),
+    ],
+  };
+}
+
+// Standardized parameter validation
+function validateRequiredParameter(
+  value: any,
+  paramName: string,
+  toolName: string
+): void {
+  if (!value) {
+    throw new Error(`${paramName} parameter is required for ${toolName}`);
+  }
+}
+
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext) {
@@ -60,31 +89,14 @@ function registerGetCMakeProjectInfoTool(): vscode.Disposable {
     invoke: async (options, token) => {
       try {
         const project = await getCurrentProject();
-        if (!project) {
-          return {
-            content: [
-              new vscode.LanguageModelTextPart("No active CMake project found"),
-            ],
-          };
-        }
-
-        const codeModel = project.codeModel;
-        if (!codeModel) {
-          return {
-            content: [
-              new vscode.LanguageModelTextPart(
-                "CMake code model not available. Try configuring the project first."
-              ),
-            ],
-          };
-        }
+        const codeModel = project.codeModel; // No need for ! since type guarantees it exists
 
         let result = "CMake Project Information:\n\n";
 
-        // Get active folder path as source directory
-        const activeFolderPath = cmakeToolsApi?.getActiveFolderPath();
-        if (activeFolderPath) {
-          result += `Source Directory: ${activeFolderPath}\n`;
+        // Get workspace root
+        const workspaceRoot = getWorkspaceRoot();
+        if (workspaceRoot) {
+          result += `Source Directory: ${workspaceRoot}\n`;
         }
 
         // Get build directory
@@ -106,7 +118,10 @@ function registerGetCMakeProjectInfoTool(): vscode.Disposable {
           // Sort targets alphabetically by name
           const sortedTargets = allTargets
             .map((target) => {
-              const relativeSourceDir = getRelativeSourceDirectory(target.sourceDirectory, activeFolderPath || "");
+              const relativeSourceDir = getRelativeSourceDirectory(
+                target.sourceDirectory,
+                workspaceRoot
+              );
               return {
                 name: target.name,
                 type: formatTargetType(target.type),
@@ -130,13 +145,7 @@ function registerGetCMakeProjectInfoTool(): vscode.Disposable {
           content: [new vscode.LanguageModelTextPart(result)],
         };
       } catch (error) {
-        return {
-          content: [
-            new vscode.LanguageModelTextPart(
-              `Error getting project info: ${error}`
-            ),
-          ],
-        };
+        return createErrorResponse("get_cmake_project_info", error);
       }
     },
   });
@@ -147,25 +156,48 @@ function escapeRegex(string: string): string {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function getRelativeSourceDirectory(sourceDirectory: string | undefined, workspaceRoot: string): string | undefined {
+function getWorkspaceRoot(): string {
+  // Try to get the active folder path from CMake Tools API first
+  const activeFolderPath = cmakeToolsApi?.getActiveFolderPath();
+  if (activeFolderPath) {
+    return activeFolderPath;
+  }
+
+  // Fallback to the first workspace folder if available
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (workspaceFolders && workspaceFolders.length > 0) {
+    return workspaceFolders[0].uri.fsPath;
+  }
+
+  // Final fallback to empty string (will be handled gracefully by path functions)
+  return "";
+}
+
+function getRelativeSourceDirectory(
+  sourceDirectory: string | undefined,
+  workspaceRoot: string
+): string | undefined {
   if (!sourceDirectory) {
     return undefined;
   }
-  
+
   try {
     const normalizedSourceDir = path.resolve(sourceDirectory);
     const normalizedWorkspaceRoot = path.resolve(workspaceRoot);
-    
+
     // Check if the source directory is within the workspace
     if (normalizedSourceDir.startsWith(normalizedWorkspaceRoot)) {
-      const relativePath = path.relative(normalizedWorkspaceRoot, normalizedSourceDir);
+      const relativePath = path.relative(
+        normalizedWorkspaceRoot,
+        normalizedSourceDir
+      );
       // Return undefined if it's the root directory (empty string)
       return relativePath || undefined;
     }
   } catch (error) {
     console.warn("Error calculating relative source directory:", error);
   }
-  
+
   return undefined;
 }
 
@@ -267,13 +299,7 @@ function registerGetCMakeCacheVariableTool(): vscode.Disposable {
           content: [new vscode.LanguageModelTextPart(result)],
         };
       } catch (error) {
-        return {
-          content: [
-            new vscode.LanguageModelTextPart(
-              `Failed to get CMake cache variable due to an error: ${error}`
-            ),
-          ],
-        };
+        return createErrorResponse("get_cmake_cache_variable", error);
       }
     },
   });
@@ -286,13 +312,6 @@ function registerBuildCMakeTargetTool(): vscode.Disposable {
         const { targets } = options.input as { targets?: string[] };
 
         const project = await getCurrentProject();
-        if (!project) {
-          return {
-            content: [
-              new vscode.LanguageModelTextPart("No active CMake project found"),
-            ],
-          };
-        }
 
         // Start the build
         const buildTargets =
@@ -361,11 +380,7 @@ function registerBuildCMakeTargetTool(): vscode.Disposable {
           }
         }
       } catch (error) {
-        return {
-          content: [
-            new vscode.LanguageModelTextPart(`Error building target: ${error}`),
-          ],
-        };
+        return createErrorResponse("build_cmake_target", error);
       }
     },
   });
@@ -377,13 +392,23 @@ function registerConfigureCMakeProjectTool(): vscode.Disposable {
       try {
         const { delete_cache } = options.input as { delete_cache?: boolean };
 
-        const project = await getCurrentProject();
+        // Note: For configuration, we shouldn't require codeModel to exist since
+        // configuration is what creates the codeModel. So we'll create a simpler version
+        // of getCurrentProject for this specific case.
+        if (!cmakeToolsApi) {
+          throw new Error("CMake Tools API not available");
+        }
+
+        const activeFolder = cmakeToolsApi.getActiveFolderPath();
+        if (!activeFolder) {
+          throw new Error("No active CMake project found");
+        }
+
+        const folderUri = vscode.Uri.file(activeFolder);
+        const project = await cmakeToolsApi.getProject(folderUri);
+
         if (!project) {
-          return {
-            content: [
-              new vscode.LanguageModelTextPart("No active CMake project found"),
-            ],
-          };
+          throw new Error("No active CMake project found");
         }
 
         // Determine which method to use based on delete_cache parameter
@@ -448,13 +473,7 @@ function registerConfigureCMakeProjectTool(): vscode.Disposable {
           }
         }
       } catch (error) {
-        return {
-          content: [
-            new vscode.LanguageModelTextPart(
-              `Error configuring CMake project: ${error}`
-            ),
-          ],
-        };
+        return createErrorResponse("configure_cmake_project", error);
       }
     },
   });
@@ -465,36 +484,18 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
     invoke: async (options, token) => {
       try {
         const { file_path } = options.input as { file_path?: string };
+        validateRequiredParameter(
+          file_path?.trim(),
+          "file_path",
+          "find_cmake_build_target_containing_file"
+        );
 
-        if (!file_path || file_path.trim().length === 0) {
-          return {
-            content: [
-              new vscode.LanguageModelTextPart(
-                "Error: file_path parameter is required"
-              ),
-            ],
-          };
-        }
+        // Type assertion is safe here because validateRequiredParameter throws if file_path is falsy
+        const filePath = file_path as string;
 
         const project = await getCurrentProject();
-        if (!project) {
-          return {
-            content: [
-              new vscode.LanguageModelTextPart("No active CMake project found"),
-            ],
-          };
-        }
-
-        const codeModel = project.codeModel;
-        if (!codeModel) {
-          return {
-            content: [
-              new vscode.LanguageModelTextPart(
-                "CMake code model not available. Try configuring the project first."
-              ),
-            ],
-          };
-        }
+        const codeModel = project.codeModel; // No need for ! since type guarantees it exists
+        const workspaceRoot = getWorkspaceRoot();
 
         // Get all targets from all configurations
         const allTargets = codeModel.configurations.flatMap((config) =>
@@ -502,7 +503,7 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
         );
 
         // Normalize the input file path for comparison
-        const normalizedFilePath = path.resolve(file_path);
+        const normalizedFilePath = path.resolve(filePath);
 
         // Find targets that directly contain the file in their sources
         const directMatches: Array<CodeModel.Target> = [];
@@ -586,8 +587,13 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
         // Direct matches first
         if (directMatches.length === 1) {
           const target = directMatches[0];
-          const relativeSourceDir = getRelativeSourceDirectory(target.sourceDirectory, cmakeToolsApi?.getActiveFolderPath() || "");
-          let message = `The file \`${file_path}\` is directly included in the \`${target.name}\` target, which has type ${formatTargetType(target.type)}.`;
+          const relativeSourceDir = getRelativeSourceDirectory(
+            target.sourceDirectory,
+            workspaceRoot
+          );
+          let message = `The file \`${file_path}\` is directly included in the \`${
+            target.name
+          }\` target, which has type ${formatTargetType(target.type)}.`;
           if (relativeSourceDir) {
             message += ` The target's source directory is at \`${relativeSourceDir}\`.`;
           }
@@ -597,11 +603,15 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
         }
 
         if (directMatches.length > 1) {
-          const workspaceRoot = cmakeToolsApi?.getActiveFolderPath() || "";
           let result = `Multiple targets seem to directly include \`${file_path}\`:\n\n`;
           for (const match of directMatches) {
-            const relativeSourceDir = getRelativeSourceDirectory(match.sourceDirectory, workspaceRoot);
-            let targetInfo = `  - ${match.name} (${formatTargetType(match.type)})`;
+            const relativeSourceDir = getRelativeSourceDirectory(
+              match.sourceDirectory,
+              workspaceRoot
+            );
+            let targetInfo = `  - ${match.name} (${formatTargetType(
+              match.type
+            )})`;
             if (relativeSourceDir) {
               targetInfo += ` [${relativeSourceDir}]`;
             }
@@ -615,8 +625,6 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
 
         // Include matches
         if (includeMatches.length > 0) {
-          const workspaceRoot = cmakeToolsApi?.getActiveFolderPath() || "";
-          
           // Find the match in source directory with the longest path
           const matchInSourceDir =
             includeMatches
@@ -630,8 +638,15 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
           let result = `Found ${includeMatches.length} targets that can potentially include file \`${file_path}\`.\n`;
 
           if (matchInSourceDir !== undefined) {
-            const relativeSourceDir = getRelativeSourceDirectory(matchInSourceDir.sourceDirectory, workspaceRoot);
-            let message = `It is likely part of the \`${matchInSourceDir.name}\` target, which has type ${formatTargetType(matchInSourceDir.type)}, as it was found within its source directory`;
+            const relativeSourceDir = getRelativeSourceDirectory(
+              matchInSourceDir.sourceDirectory,
+              workspaceRoot
+            );
+            let message = `It is likely part of the \`${
+              matchInSourceDir.name
+            }\` target, which has type ${formatTargetType(
+              matchInSourceDir.type
+            )}, as it was found within its source directory`;
             if (relativeSourceDir) {
               message += ` at \`${relativeSourceDir}\``;
             }
@@ -641,8 +656,13 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
           const targetNames = includeMatches
             .filter((match) => match.target.name !== matchInSourceDir?.name)
             .map((m) => {
-              const relativeSourceDir = getRelativeSourceDirectory(m.target.sourceDirectory, workspaceRoot);
-              let targetInfo = `${m.target.name} (${formatTargetType(m.target.type)})`;
+              const relativeSourceDir = getRelativeSourceDirectory(
+                m.target.sourceDirectory,
+                workspaceRoot
+              );
+              let targetInfo = `${m.target.name} (${formatTargetType(
+                m.target.type
+              )})`;
               if (relativeSourceDir) {
                 targetInfo += ` [${relativeSourceDir}]`;
               }
@@ -668,15 +688,19 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
         // Source directory matches
         if (sourceDirMatches.length > 0) {
           const target = sourceDirMatches[0];
-          const workspaceRoot = cmakeToolsApi?.getActiveFolderPath() || "";
-          const relativeSourceDir = getRelativeSourceDirectory(target.sourceDirectory, workspaceRoot);
-          
-          let message = `The file \`${file_path}\` is located within the source directory of the \`${target.name}\` target, which has type ${formatTargetType(target.type)}`;
+          const relativeSourceDir = getRelativeSourceDirectory(
+            target.sourceDirectory,
+            workspaceRoot
+          );
+
+          let message = `The file \`${file_path}\` is located within the source directory of the \`${
+            target.name
+          }\` target, which has type ${formatTargetType(target.type)}`;
           if (relativeSourceDir) {
             message += ` at \`${relativeSourceDir}\``;
           }
           message += ". This seems the most likely target to own this file.";
-          
+
           return {
             content: [new vscode.LanguageModelTextPart(message)],
           };
@@ -690,30 +714,40 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
           ],
         };
       } catch (error) {
-        return {
-          content: [
-            new vscode.LanguageModelTextPart(
-              `Error finding targets containing file: ${error}`
-            ),
-          ],
-        };
+        return createErrorResponse(
+          "find_cmake_build_target_containing_file",
+          error
+        );
       }
     },
   });
 }
 
-async function getCurrentProject(): Promise<Project | undefined> {
+async function getCurrentProject(): Promise<ProjectWithCodeModel> {
   if (!cmakeToolsApi) {
     throw new Error("CMake Tools API not available");
   }
 
   const activeFolder = cmakeToolsApi.getActiveFolderPath();
   if (!activeFolder) {
-    return undefined;
+    throw new Error("No active CMake project found");
   }
 
   const folderUri = vscode.Uri.file(activeFolder);
-  return await cmakeToolsApi.getProject(folderUri);
+  const project = await cmakeToolsApi.getProject(folderUri);
+
+  if (!project) {
+    throw new Error("No active CMake project found");
+  }
+
+  // Also validate that the code model is available
+  if (!project.codeModel) {
+    throw new Error(
+      "CMake code model not available. Try configuring the project first."
+    );
+  }
+
+  return project as ProjectWithCodeModel;
 }
 
 // This method is called when your extension is deactivated

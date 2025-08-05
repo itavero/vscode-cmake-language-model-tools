@@ -37,7 +37,7 @@
       {
         "name": "get_cmake_project_info",
         "displayName": "Get CMake Project Info",
-        "modelDescription": "Returns comprehensive information about the CMake project including source directory, build directory, and a list of all targets with their types and relative source directories (when within the workspace). This provides a high-level overview of the project structure and available build targets.",
+        "modelDescription": "Returns comprehensive information about the CMake project including source directory, build directory, and a list of all targets with their types and relative source directories (when within the workspace). This provides a high-level overview of the project structure and available build targets as well as a hint to where the targets are defined.",
         "userDescription": "Get comprehensive information about the current CMake project",
         "canBeReferencedInPrompt": true,
         "toolReferenceName": "get_cmake_project_info",

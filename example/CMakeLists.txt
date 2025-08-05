@@ -42,6 +42,9 @@ add_custom_target(docs
 message(STATUS "LANGUAGE MODEL: This should end up in the std output of the test")
 message(NOTICE "LANGUAGE MODEL: This is an important message in the std err output.")
 
+# Add subdirectories
+add_subdirectory(sub_dir_with_a_target)
+
 # Installation rules
 install(TARGETS hello_world
   DESTINATION bin

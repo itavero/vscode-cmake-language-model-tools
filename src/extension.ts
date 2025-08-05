@@ -203,10 +203,9 @@ function getRelativeOrAbsoluteSourcePath(
   try {
     // Resolve sourceDirectory relative to workspaceRoot if it's not absolute
     const resolvedWorkspaceRoot = path.resolve(workspaceRoot);
-    const resolvedSourceDir = path.resolve(
-      resolvedWorkspaceRoot,
-      sourceDirectory
-    );
+    const resolvedSourceDir = path.isAbsolute(sourceDirectory)
+      ? path.normalize(sourceDirectory)
+      : path.resolve(resolvedWorkspaceRoot, sourceDirectory);
 
     // Try to calculate relative path
     if (resolvedSourceDir.startsWith(resolvedWorkspaceRoot)) {

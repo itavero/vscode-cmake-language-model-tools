@@ -13,6 +13,7 @@ DEVELOPMENT.md
 **/*.ts
 **/.vscode-test.*
 **/*.test.js
+.env*
 
 # Not everything from the vscode-cmake-tools package is needed
 node_modules/vscode-cmake-tools/jobs/

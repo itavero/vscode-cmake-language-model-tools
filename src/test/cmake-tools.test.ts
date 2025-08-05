@@ -152,7 +152,7 @@ suite("CMake Language Model Tools Test Suite", () => {
           );
 
           // Check that relative source directories are shown when available
-          // Look for targets with [path] format indicating relative source directory
+          // Look for targets with "defined in `path`" format indicating relative source directory
           console.log("Target lines:", targetLines);
 
           // Verify getRelativeSourceDirectory functionality:
@@ -180,10 +180,12 @@ suite("CMake Language Model Tools Test Suite", () => {
               "Found config_generator target line:",
               configGeneratorLine
             );
-            // This target is in the sub_dir_with_a_target subdirectory, so it should show [sub_dir_with_a_target]
+            // This target is in the sub_dir_with_a_target subdirectory, so it should show "defined in `sub_dir_with_a_target`"
             assert.ok(
-              configGeneratorLine.includes("[sub_dir_with_a_target]"),
-              "config_generator target should show relative source directory [sub_dir_with_a_target]"
+              configGeneratorLine.includes(
+                "defined in `sub_dir_with_a_target`"
+              ),
+              "config_generator target should show relative source directory 'defined in `sub_dir_with_a_target`'"
             );
             assert.ok(
               configGeneratorLine.includes("(") &&
@@ -193,7 +195,7 @@ suite("CMake Language Model Tools Test Suite", () => {
           }
 
           // The key test is that the function works - subdirectory targets show relative paths
-          // code structure that includes [path] when available.
+          // in the format "defined in `path`" when available.
         }
       }
     }

@@ -122,27 +122,13 @@ function registerGetCMakeProjectInfoTool(): vscode.Disposable {
 
         if (allTargets.length > 0) {
           // Sort targets alphabetically by name
-          const sortedTargets = allTargets
-            .map((target) => {
-              const relativeSourceDir = getRelativeSourceDirectory(
-                target.sourceDirectory,
-                workspaceRoot
-              );
-              return {
-                name: target.name,
-                type: formatTargetType(target.type),
-                relativeSourceDir: relativeSourceDir,
-              };
-            })
-            .sort((a, b) => a.name.localeCompare(b.name));
-
-          sortedTargets.forEach((target) => {
-            let targetInfo = `  - ${target.name} (${target.type})`;
-            if (target.relativeSourceDir) {
-              targetInfo += ` [${target.relativeSourceDir}]`;
-            }
-            result += targetInfo + "\n";
-          });
+          result += allTargets
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(
+              (target) =>
+                "- " + targetToTextRepresentation(target, workspaceRoot)
+            )
+            .join("\n");
         } else {
           result += "  No targets found\n";
         }
@@ -164,7 +150,7 @@ function escapeRegex(string: string): string {
 
 /**
  * Returns the root directory of the current workspace for CMake operations.
- * 
+ *
  * Attempts to obtain the active folder path from the CMake Tools API first.
  * If unavailable, falls back to the first workspace folder in VS Code.
  * If no workspace is available, returns an empty string.
@@ -189,43 +175,69 @@ function getWorkspaceRoot(): string {
 }
 
 /**
- * Calculates the relative path from the workspace root to the given source directory.
+ * Converts a CMake target to a text representation, consisting of:
+ * - Target name
+ * - Target type (formatted)
+ * - Source directory (relative to workspace root, or absolute if not within workspace)
  *
- * @param sourceDirectory The absolute or relative path to the source directory. If undefined, the function returns undefined.
- * @param workspaceRoot The absolute or relative path to the workspace root.
- * @returns The relative path from the workspace root to the source directory, or undefined if:
- *   - sourceDirectory is not provided,
- *   - sourceDirectory is the same as the workspace root,
- *   - sourceDirectory is not within the workspace root,
- *   - an error occurs during path resolution.
- * This is useful for displaying or storing paths relative to the workspace, rather than absolute paths.
+ * @param target The CMake target to represent.
+ * @param workspaceRoot The workspace root directory.
+ * @returns A string representing the target.
  */
-function getRelativeSourceDirectory(
-  sourceDirectory: string | undefined,
+function targetToTextRepresentation(
+  target: CodeModel.Target,
   workspaceRoot: string
-): string | undefined {
-  if (!sourceDirectory) {
-    return undefined;
-  }
+): string {
+  const sourceDescription =
+    target.sourceDirectory === undefined
+      ? "with an unknown source directory"
+      : "defined in `" +
+        getRelativeOrAbsoluteSourcePath(target.sourceDirectory, workspaceRoot) +
+        "`";
+  return `${'`' + target.name + '`'} (${formatTargetType(
+    target.type
+  )} ${sourceDescription})`;
+}
 
+/**
+ * Gets the best display path for a source directory - relative if possible, absolute as fallback.
+ *
+ * @param sourceDirectory The absolute or relative path to the source directory.
+ * @param workspaceRoot The absolute path to the workspace root.
+ * @returns The relative path if within workspace, absolute path otherwise. Never returns undefined.
+ */
+function getRelativeOrAbsoluteSourcePath(
+  sourceDirectory: string,
+  workspaceRoot: string
+): string {
   try {
-    const normalizedSourceDir = path.resolve(sourceDirectory);
-    const normalizedWorkspaceRoot = path.resolve(workspaceRoot);
+    // Resolve sourceDirectory relative to workspaceRoot if it's not absolute
+    const resolvedWorkspaceRoot = path.resolve(workspaceRoot);
+    const resolvedSourceDir = path.isAbsolute(sourceDirectory)
+      ? path.normalize(sourceDirectory)
+      : path.resolve(resolvedWorkspaceRoot, sourceDirectory);
 
-    // Check if the source directory is within the workspace
-    if (normalizedSourceDir.startsWith(normalizedWorkspaceRoot)) {
+    // Try to calculate relative path
+    if (resolvedSourceDir.startsWith(resolvedWorkspaceRoot)) {
       const relativePath = path.relative(
-        normalizedWorkspaceRoot,
-        normalizedSourceDir
+        resolvedWorkspaceRoot,
+        resolvedSourceDir
       );
-      // Return undefined if it's the root directory (empty string)
-      return relativePath || undefined;
+
+      // If it's not the root directory (empty string), return relative path
+      if (relativePath) {
+        return relativePath;
+      }
     }
+
+    // Fallback to absolute path if relative calculation fails or is root
+    return resolvedSourceDir;
   } catch (error) {
-    console.warn("Error calculating relative source directory:", error);
+    console.warn("Error calculating source directory path:", error);
   }
 
-  return undefined;
+  // Fallback - return the original path or workspace root
+  return sourceDirectory;
 }
 
 function registerGetCMakeCacheVariableTool(): vscode.Disposable {
@@ -614,36 +626,23 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
         // Direct matches first
         if (directMatches.length === 1) {
           const target = directMatches[0];
-          const relativeSourceDir = getRelativeSourceDirectory(
-            target.sourceDirectory,
-            workspaceRoot
-          );
-          let message = `The file \`${file_path}\` is directly included in the \`${
-            target.name
-          }\` target, which has type ${formatTargetType(target.type)}.`;
-          if (relativeSourceDir) {
-            message += ` The target's source directory is at \`${relativeSourceDir}\`.`;
-          }
           return {
-            content: [new vscode.LanguageModelTextPart(message)],
+            content: [
+              new vscode.LanguageModelTextPart(
+                `The file \`${file_path}\` is directly included in the target ${targetToTextRepresentation(
+                  target,
+                  workspaceRoot
+                )}.`
+              ),
+            ],
           };
         }
 
         if (directMatches.length > 1) {
           let result = `Multiple targets seem to directly include \`${file_path}\`:\n\n`;
-          for (const match of directMatches) {
-            const relativeSourceDir = getRelativeSourceDirectory(
-              match.sourceDirectory,
-              workspaceRoot
-            );
-            let targetInfo = `  - ${match.name} (${formatTargetType(
-              match.type
-            )})`;
-            if (relativeSourceDir) {
-              targetInfo += ` [${relativeSourceDir}]`;
-            }
-            result += targetInfo + "\n";
-          }
+          result += directMatches
+            .map((m) => "- " + targetToTextRepresentation(m, workspaceRoot))
+            .join("\n");
 
           return {
             content: [new vscode.LanguageModelTextPart(result)],
@@ -665,36 +664,17 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
           let result = `Found ${includeMatches.length} targets that can potentially include file \`${file_path}\`.\n`;
 
           if (matchInSourceDir !== undefined) {
-            const relativeSourceDir = getRelativeSourceDirectory(
-              matchInSourceDir.sourceDirectory,
+            result += `It is likely part of target ${targetToTextRepresentation(
+              matchInSourceDir,
               workspaceRoot
-            );
-            let message = `It is likely part of the \`${
-              matchInSourceDir.name
-            }\` target, which has type ${formatTargetType(
-              matchInSourceDir.type
-            )}, as it was found within its source directory`;
-            if (relativeSourceDir) {
-              message += ` at \`${relativeSourceDir}\``;
-            }
-            result += message + ".\n\n";
+            )}, as it was found within an include directory inside the target's source directory.\n\n`;
           }
 
           const targetNames = includeMatches
             .filter((match) => match.target.name !== matchInSourceDir?.name)
-            .map((m) => {
-              const relativeSourceDir = getRelativeSourceDirectory(
-                m.target.sourceDirectory,
-                workspaceRoot
-              );
-              let targetInfo = `${m.target.name} (${formatTargetType(
-                m.target.type
-              )})`;
-              if (relativeSourceDir) {
-                targetInfo += ` [${relativeSourceDir}]`;
-              }
-              return targetInfo;
-            })
+            .map(
+              (m) => "- " + targetToTextRepresentation(m.target, workspaceRoot)
+            )
             .sort();
 
           if (targetNames.length > 0) {
@@ -703,8 +683,7 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
             } else {
               result += `Targets that can access this file via include paths:\n`;
             }
-            result +=
-              targetNames.map((name) => `  - ${name}`).join("\n") + "\n\n";
+            result += targetNames.join("\n");
           }
 
           return {
@@ -714,22 +693,15 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
 
         // Source directory matches
         if (sourceDirMatches.length > 0) {
-          const target = sourceDirMatches[0];
-          const relativeSourceDir = getRelativeSourceDirectory(
-            target.sourceDirectory,
-            workspaceRoot
-          );
-
-          let message = `The file \`${file_path}\` is located within the source directory of the \`${
-            target.name
-          }\` target, which has type ${formatTargetType(target.type)}`;
-          if (relativeSourceDir) {
-            message += ` at \`${relativeSourceDir}\``;
-          }
-          message += ". This seems the most likely target to own this file.";
-
           return {
-            content: [new vscode.LanguageModelTextPart(message)],
+            content: [
+              new vscode.LanguageModelTextPart(
+                `The file \`${file_path}\` is located within the source directory of target ${targetToTextRepresentation(
+                  sourceDirMatches[0],
+                  workspaceRoot
+                )}. This seems the most likely target to own this file.`
+              ),
+            ],
           };
         }
 
@@ -752,14 +724,14 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
 
 /**
  * Retrieves the current active CMake project with a valid code model.
- * 
+ *
  * This function uses the CMake Tools API to get the active folder and project.
  * It throws an error if the API is unavailable, if there is no active project,
  * or if the project's code model is not available (e.g., before configuration).
- * 
+ *
  * The returned project is type-asserted to `ProjectWithCodeModel` because the
  * function ensures that the `codeModel` property is present before returning.
- * 
+ *
  * @throws {Error} If the CMake Tools API is not available.
  * @throws {Error} If there is no active CMake project.
  * @throws {Error} If the project's code model is not available.

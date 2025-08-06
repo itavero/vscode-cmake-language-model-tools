@@ -11,7 +11,8 @@
     "url": "https://github.com/itavero/vscode-cmake-language-model-tools.git"
   },
   "bugs": {
-    "url": "https://github.com/itavero/vscode-cmake-language-model-tools/issues"
+    "url": "https://github.com/itavero/vscode-cmake-language-model-tools/issues",
+    "email": "vscode@arno.dev"
   },
   "sponsor": {
     "url": "https://github.com/sponsors/itavero"
@@ -20,12 +21,18 @@
     "vscode": "^1.102.0"
   },
   "categories": [
-    "Other"
+    "AI",
+    "Chat"
   ],
   "keywords": [
     "CMake",
     "Copilot"
   ],
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#DCE3EC",
+    "theme": "light"
+  },
   "qna": false,
   "activationEvents": [
     "workspaceContains:CMakeLists.txt",

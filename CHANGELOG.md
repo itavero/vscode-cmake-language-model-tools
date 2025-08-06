@@ -4,6 +4,12 @@ All notable changes to the "cmake-language-model-tools" extension will be docume
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [Unreleased]
+
+### Notes
+
+Starting with this release, the VSIX is also available via the [Releases](https://github.com/itavero/vscode-cmake-language-model-tools/releases) section on the GitHub repository.
+
 ## [0.2.1] - 2025-08-06
 
 ### Fixed

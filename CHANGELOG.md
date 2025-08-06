@@ -4,11 +4,11 @@ All notable changes to the "cmake-language-model-tools" extension will be docume
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
-## [Unreleased
+## [Unreleased]
 
 ### Fixed
 
-- Improved logic to convert absolute paths to relative paths witin the workspace. (see [#7](https://github.com/itavero/vscode-cmake-language-model-tools/issues/7))
+- Improved logic to convert absolute paths to relative paths within the workspace. (see [#7](https://github.com/itavero/vscode-cmake-language-model-tools/issues/7))
 
 ## [0.2.0] - 2025-08-05
 

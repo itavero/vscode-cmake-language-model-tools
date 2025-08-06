@@ -14,7 +14,14 @@
     ]
   },
   "github": {
-    "release": true
+    "release": true,
+    "releaseName": "Release v${version}",
+    "comments": {
+      "submit": true
+    },
+    "assets": [
+      "release-*.vsix"
+    ]
   },
   "npm": {
     "publish": false
@@ -27,6 +34,7 @@
   "hooks": {
     "before:init": [
       "npm ci",
+      "npm run clean",
       "npm run test"
     ],
     "before:git:release": "npx dotenv vsce package -- -o release-${version}.vsix",

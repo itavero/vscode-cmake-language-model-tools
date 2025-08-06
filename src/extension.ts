@@ -194,7 +194,7 @@ function targetToTextRepresentation(
       : "defined in `" +
         getRelativeOrAbsoluteSourcePath(target.sourceDirectory, workspaceRoot) +
         "`";
-  return `${'`' + target.name + '`'} (${formatTargetType(
+  return `${"`" + target.name + "`"} (${formatTargetType(
     target.type
   )} ${sourceDescription})`;
 }
@@ -218,20 +218,26 @@ function getRelativeOrAbsoluteSourcePath(
       : path.resolve(resolvedWorkspaceRoot, sourceDirectory);
 
     // Try to calculate relative path
-    if (resolvedSourceDir.startsWith(resolvedWorkspaceRoot)) {
-      const relativePath = path.relative(
-        resolvedWorkspaceRoot,
-        resolvedSourceDir
-      );
+    const relativePath = path.relative(
+      resolvedWorkspaceRoot,
+      resolvedSourceDir
+    );
 
-      // If it's not the root directory (empty string), return relative path
-      if (relativePath) {
-        return relativePath;
-      }
+    // If the relative path starts with '..' or a drive letter (on Windows),
+    // it is not within the workspace root, so return absolute path
+    if (relativePath.startsWith("..") || /^[a-zA-Z]:[\\/]/.test(relativePath)) {
+      return resolvedSourceDir;
     }
 
-    // Fallback to absolute path if relative calculation fails or is root
-    return resolvedSourceDir;
+    // If relative path is an empty string, it means the source directory is the workspace root
+    // In this case, we return the absolute path to avoid confusion
+    if (relativePath === "") {
+      return resolvedSourceDir;
+    }
+
+    // Otherwise, the source directory is within the workspace root,
+    // so we return the relative path
+    return relativePath;
   } catch (error) {
     console.warn("Error calculating source directory path:", error);
   }

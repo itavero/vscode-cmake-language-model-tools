@@ -1,6 +1,6 @@
 # CMake Language Model Tools
 
-This Visual Studio Code extension provides language model tools to allow Copilot to interact with the [CMake Tools extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cmake-tools).
+This extension provides several language model tools to allow Copilot to interact with the [CMake Tools extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cmake-tools).
 
 ## Current state
 
@@ -8,23 +8,15 @@ I'm creating a first version of this extension with the help of my friend, Copil
 I still need to validate it a bit more and actually use it in my own development workflow,
 to see how practical it is and what improvements are needed.
 
-## Features
-
-This extension provides several language model tools that enable Copilot to access CMake project information and perform build operations. These tools work with the CMake Tools extension to provide a seamless experience.
-
 ## Provided tools
 
 Below is a list of language model tools that are provided by this extension.
 
 ### `#get_cmake_project_info`
 
-> State: ✅ **Implemented**
-
 This tool returns comprehensive information about the current CMake project including the source directory, build directory, and an alphabetically sorted list of all targets with their types. It provides a high-level overview of the project structure and available build targets.
 
 ### `#get_cmake_cache_variable`
-
-> State: ✅ **Implemented**
 
 This tool retrieves one or more values from the CMake cache. It supports exact name matching, wildcard (`*`) searches, or listing all variables when no parameter is provided. It is useful for getting configuration values that are kept in the CMake cache.
 
@@ -34,8 +26,6 @@ This tool retrieves one or more values from the CMake cache. It supports exact n
 
 ### `#build_cmake_target`
 
-> State: ✅ **Implemented**
-
 This tool builds the specified CMake target (or all targets if none is specified).
 
 **Parameters:**
@@ -43,8 +33,6 @@ This tool builds the specified CMake target (or all targets if none is specified
 - `targets` (optional): Array of target names to build. If not specified, builds all targets.
 
 ### `#find_cmake_build_target_containing_file`
-
-> State: ✅ **Implemented**
 
 This tool helps to find the CMake target(s) that can build/include a specific file in the workspace.
 It searches for targets that either have the file listed as a source, have an include directory that contains the file, or the target's source directory matches the file's path.

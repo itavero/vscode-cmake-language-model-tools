@@ -31,7 +31,7 @@
   "icon": "images/icon.png",
   "galleryBanner": {
     "color": "#DCE3EC",
-    "theme": "dark"
+    "theme": "light"
   },
   "qna": false,
   "activationEvents": [

@@ -6,6 +6,10 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Changed
+
+- Enhanced `find_cmake_build_target_containing_file` tool to prioritize targets by type when multiple matches are found, preferring executable and library targets over utility targets
+
 ### Notes
 
 Starting with this release, the VSIX is also available via the [Releases](https://github.com/itavero/vscode-cmake-language-model-tools/releases) section on the GitHub repository.

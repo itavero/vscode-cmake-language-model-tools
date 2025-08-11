@@ -15,3 +15,6 @@ The extension itself is written in TypeScript and we use npm scripts to build an
 
 Note: as can be seen in the `package.json`, as a pre-test step both building and linting are run.
 This means you can run `npm test` to build, lint and run the tests in one go.
+
+When running tests in a headless environment (such as in CI or when not running in Agent mode in VS Code), you can use `xvfb` to provide a virtual display. If xvfb is available, you can run tests using:
+`xvfb-run --auto-servernum npm test`

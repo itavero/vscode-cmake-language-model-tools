@@ -4,7 +4,7 @@ All notable changes to the "cmake-language-model-tools" extension will be docume
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
-## [Unreleased]
+## [0.2.2] - 2025-08-11
 
 ### Changed
 

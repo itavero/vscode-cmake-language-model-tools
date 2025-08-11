@@ -3,7 +3,7 @@
   "publisher": "arno-dev",
   "displayName": "CMake Language Model Tools",
   "description": "Give Copilot access to CMake Tools",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "license": "SEE LICENSE IN LICENSE.txt",
   "homepage": "https://github.com/itavero/vscode-cmake-language-model-tools",
   "repository": {

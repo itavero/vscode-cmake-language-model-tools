@@ -38,7 +38,7 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm ci
 
-      - name: Install xvfb for headless testing
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb x11-xserver-utils
+      - name: Setup xvfb for headless testing
+        uses: GabrielBB/xvfb-action@v1.0
+        with:
+          run: echo "xvfb is now available for headless testing"

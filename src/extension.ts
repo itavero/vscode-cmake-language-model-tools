@@ -90,6 +90,53 @@ function formatTargetType(type: string): string {
     .trim();
 }
 
+/**
+ * Gets the priority value for a target type, lower numbers indicate higher priority.
+ * Priority order: EXECUTABLE, STATIC_LIBRARY, MODULE_LIBRARY, SHARED_LIBRARY, OBJECT_LIBRARY, UTILITY, INTERFACE_LIBRARY
+ * @param targetType The target type as a string
+ * @returns Priority value (0-6, lower is higher priority), or 999 for unknown types
+ */
+function getTargetTypePriority(targetType: string): number {
+  switch (targetType) {
+    case "EXECUTABLE":
+      return 0;
+    case "STATIC_LIBRARY":
+      return 1;
+    case "MODULE_LIBRARY":
+      return 2;
+    case "SHARED_LIBRARY":
+      return 3;
+    case "OBJECT_LIBRARY":
+      return 4;
+    case "UTILITY":
+      return 5;
+    case "INTERFACE_LIBRARY":
+      return 6;
+    default:
+      return 999; // Unknown types get lowest priority
+  }
+}
+
+/**
+ * Sorts targets by type priority first, then alphabetically by name.
+ * @param targets Array of targets to sort
+ * @returns New sorted array
+ */
+function sortTargetsByTypePriority(targets: CodeModel.Target[]): CodeModel.Target[] {
+  return [...targets].sort((a, b) => {
+    const priorityA = getTargetTypePriority(a.type);
+    const priorityB = getTargetTypePriority(b.type);
+    
+    // First sort by type priority
+    if (priorityA !== priorityB) {
+      return priorityA - priorityB;
+    }
+    
+    // If same priority, sort alphabetically by name
+    return a.name.localeCompare(b.name);
+  });
+}
+
 function registerGetCMakeProjectInfoTool(): vscode.Disposable {
   return vscode.lm.registerTool("get_cmake_project_info", {
     invoke: async (options, token) => {
@@ -622,16 +669,29 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
           return a.target.name.localeCompare(b.target.name);
         });
 
-        // Sort source directory matches on the longest source directory first
-        sourceDirMatches.sort((a, b) => {
+        // Sort all match arrays by target type priority
+        const sortedDirectMatches = sortTargetsByTypePriority(directMatches);
+        const sortedSourceDirMatches = sortTargetsByTypePriority(sourceDirMatches);
+        
+        // Sort source directory matches by target type priority first, then by longest source directory
+        sortedSourceDirMatches.sort((a, b) => {
+          const priorityA = getTargetTypePriority(a.type);
+          const priorityB = getTargetTypePriority(b.type);
+          
+          // First sort by type priority
+          if (priorityA !== priorityB) {
+            return priorityA - priorityB;
+          }
+          
+          // If same priority, sort by source directory length (longer first)
           const aLength = a.sourceDirectory?.length ?? 0;
           const bLength = b.sourceDirectory?.length ?? 0;
           return bLength - aLength; // Sort descending by length
         });
 
-        // Direct matches first
-        if (directMatches.length === 1) {
-          const target = directMatches[0];
+        // Direct matches first - prefer highest priority target type
+        if (sortedDirectMatches.length === 1) {
+          const target = sortedDirectMatches[0];
           return {
             content: [
               new vscode.LanguageModelTextPart(
@@ -644,28 +704,55 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
           };
         }
 
-        if (directMatches.length > 1) {
-          let result = `Multiple targets seem to directly include \`${file_path}\`:\n\n`;
-          result += directMatches
-            .map((m) => "- " + targetToTextRepresentation(m, workspaceRoot))
-            .join("\n");
+        if (sortedDirectMatches.length > 1) {
+          // Return the highest priority target, but mention others exist
+          const bestTarget = sortedDirectMatches[0];
+          const otherTargets = sortedDirectMatches.slice(1);
+          
+          let result = `The file \`${file_path}\` is directly included in the target ${targetToTextRepresentation(
+            bestTarget,
+            workspaceRoot
+          )}.`;
+          
+          if (otherTargets.length > 0) {
+            result += `\n\nOther targets that also directly include this file:\n`;
+            result += otherTargets
+              .map((m) => "- " + targetToTextRepresentation(m, workspaceRoot))
+              .join("\n");
+          }
 
           return {
             content: [new vscode.LanguageModelTextPart(result)],
           };
         }
 
-        // Include matches
+        // Include matches - sort by target type priority, then by existing criteria
         if (includeMatches.length > 0) {
-          // Find the match in source directory with the longest path
-          const matchInSourceDir =
-            includeMatches
-              .filter((match) => match.withinSourceDir)
-              .sort((a, b) => {
-                const aLength = a.target.sourceDirectory?.length ?? 0;
-                const bLength = b.target.sourceDirectory?.length ?? 0;
-                return bLength - aLength; // Sort descending by length
-              })[0]?.target ?? undefined;
+          // Sort include matches by target type priority first, then by other criteria
+          includeMatches.sort((a, b) => {
+            const priorityA = getTargetTypePriority(a.target.type);
+            const priorityB = getTargetTypePriority(b.target.type);
+            
+            // First sort by type priority
+            if (priorityA !== priorityB) {
+              return priorityA - priorityB;
+            }
+            
+            // Then prefer those within source directory
+            if (a.withinSourceDir && !b.withinSourceDir) {
+              return -1;
+            }
+            if (!a.withinSourceDir && b.withinSourceDir) {
+              return 1;
+            }
+            
+            // If same priority and same withinSourceDir status, sort by name
+            return a.target.name.localeCompare(b.target.name);
+          });
+
+          // Find the best match (highest priority type) within source directory
+          const matchInSourceDir = includeMatches
+            .filter((match) => match.withinSourceDir)[0]?.target ?? undefined;
 
           let result = `Found ${includeMatches.length} targets that can potentially include file \`${file_path}\`.\n`;
 
@@ -674,20 +761,29 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
               matchInSourceDir,
               workspaceRoot
             )}, as it was found within an include directory inside the target's source directory.\n\n`;
+          } else {
+            // If no match within source dir, pick the highest priority target
+            const bestMatch = includeMatches[0];
+            result += `The most likely target is ${targetToTextRepresentation(
+              bestMatch.target,
+              workspaceRoot
+            )} based on target type priority.\n\n`;
           }
 
           const targetNames = includeMatches
-            .filter((match) => match.target.name !== matchInSourceDir?.name)
+            .filter((match) => 
+              match.target.name !== matchInSourceDir?.name && 
+              match.target.name !== (matchInSourceDir ? undefined : includeMatches[0]?.target.name)
+            )
             .map(
               (m) => "- " + targetToTextRepresentation(m.target, workspaceRoot)
-            )
-            .sort();
+            );
 
           if (targetNames.length > 0) {
             if (matchInSourceDir !== undefined) {
               result += `Other targets that can access this file via include paths:\n`;
             } else {
-              result += `Targets that can access this file via include paths:\n`;
+              result += `Other targets that can access this file via include paths:\n`;
             }
             result += targetNames.join("\n");
           }
@@ -697,17 +793,24 @@ function registerFindCMakeBuildTargetContainingFileTool(): vscode.Disposable {
           };
         }
 
-        // Source directory matches
-        if (sourceDirMatches.length > 0) {
+        // Source directory matches - prefer by target type priority
+        if (sortedSourceDirMatches.length > 0) {
+          const bestTarget = sortedSourceDirMatches[0];
+          let result = `The file \`${file_path}\` is located within the source directory of target ${targetToTextRepresentation(
+            bestTarget,
+            workspaceRoot
+          )}. This seems the most likely target to own this file.`;
+          
+          if (sortedSourceDirMatches.length > 1) {
+            const otherTargets = sortedSourceDirMatches.slice(1);
+            result += `\n\nOther targets with source directories containing this file:\n`;
+            result += otherTargets
+              .map((m) => "- " + targetToTextRepresentation(m, workspaceRoot))
+              .join("\n");
+          }
+          
           return {
-            content: [
-              new vscode.LanguageModelTextPart(
-                `The file \`${file_path}\` is located within the source directory of target ${targetToTextRepresentation(
-                  sourceDirMatches[0],
-                  workspaceRoot
-                )}. This seems the most likely target to own this file.`
-              ),
-            ],
+            content: [new vscode.LanguageModelTextPart(result)],
           };
         }
 

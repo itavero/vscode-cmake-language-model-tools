@@ -153,7 +153,7 @@
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.6.2",
     "dotenv-cli": "^10.0.0",
-    "eslint": "^9.32.0",
+    "eslint": "^9.37.0",
     "release-it": "^19.0.5",
     "rimraf": "^6.0.1",
     "typescript": "~5.8.3"
